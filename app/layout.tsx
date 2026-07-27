@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script"; // <-- Import du composant Script de Next.js
+import Script from "next/script";
 import "./globals.css";
-import SidebarWrapper from "@/components/SidebarWrapper"; // <-- Import modifié
+import SidebarWrapper from "@/components/SidebarWrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,11 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex bg-[#F8FAFC] text-slate-900 font-sans overflow-hidden">
+    <html lang="fr" className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans flex flex-col md:flex-row antialiased">
         
         {/* Chargement global et optimisé du script FedaPay */}
         <Script 
@@ -37,14 +34,13 @@ export default function RootLayout({
           strategy="afterInteractive" 
         />
 
-        {/* Barre latérale / Header mobile (gérée conditionnellement) */}
+        {/* Barre latérale / Header mobile */}
         <SidebarWrapper />
 
         {/* Contenu principal de la page active 
-            - pt-16 : décale le contenu sous le header fixe sur mobile
-            - md:pt-0 : réinitialise l'alignement sur PC
-            - pb-8 : marge d'aisance en bas de page sur mobile */}
-        <main className="flex-1 flex flex-col h-dvh md:h-screen overflow-y-auto bg-[#F8FAFC] pt-16 md:pt-0 pb-8 md:pb-0">
+            - Suppression de h-dvh / h-screen et overflow-hidden bloquants
+            - Utilisation d'un flux naturel fluide (min-h-screen) pour Safari / iPad */}
+        <main className="flex-1 flex flex-col min-w-0 bg-[#F8FAFC] pt-16 md:pt-0 min-h-screen">
           {children}
         </main>
 
