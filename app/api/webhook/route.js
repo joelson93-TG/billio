@@ -2,24 +2,30 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Initialisation sécurisée de Firebase Admin (évite les doublons d'initialisation sur Vercel)
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
-  });
-}
+// LIGNE CRUCIALE : Empêche Next.js d'exécuter ce code pendant le build (évite l'erreur OpenSSL)
+export const dynamic = 'force-dynamic';
 
-const db = getFirestore();
+// Initialisation sécurisée de Firebase Admin
+if (!getApps().length) {
+  // On vérifie que la variable existe pour ne pas faire crasher le build
+  if (process.env.FIREBASE_PRIVATE_KEY) {
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      }),
+    });
+  }
+}
 
 export async function POST(request) {
   try {
+    // On récupère Firestore uniquement au moment où le webhook est réellement appelé
+    const db = getFirestore();
     const body = await request.json();
     
-    // Adaptez selon la structure de votre passerelle de paiement (ex: FedaPay)
+    // Structure FedaPay
     const eventStatus = body.event || body.status;
     const transactionData = body.entity || body.data;
 
