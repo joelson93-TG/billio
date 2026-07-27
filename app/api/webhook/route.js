@@ -6,8 +6,8 @@ export const dynamic = 'force-dynamic';
 
 function getAdminDb() {
   if (!getApps().length) {
-    // Clé privée intégrée en dur avec des backticks (`) pour respecter les sauts de ligne
-    const privateKey = `-----BEGIN PRIVATE KEY-----
+    // Clé privée brute intégrée en dur
+    const rawPrivateKey = `-----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC/zutrPW6UyBXw
 JP/zxBWkY10dOZDx388lm5Fg4e63I8YuGWW8TO5zjzN/BypEyaJ+vNtrds6f7gUz
 wvN75t3aIh55WOJeIY/zOl672RPpFD/hweaW9fCMZkL8Gq0V6DzzmHeQ7l9N81G1
@@ -35,6 +35,9 @@ nv9oNkqaYJjWCNkSK/uNltNQO27ev4FT9lgORHhfirHFsFkImymeX3wTLG7sVQaHU
 rr8F9UxdrqhYBJGGihkQVBwqsXkji7QOLC/gKWJjwllTZNJCodH7o+44TPMIScpS
 nxkMrOMFsOLUxhA1K7qeo1zA=
 -----END PRIVATE KEY-----`;
+
+    // Suppression automatique des caractères \r (Windows)
+    const privateKey = rawPrivateKey.replace(/\r/g, '');
 
     initializeApp({
       credential: cert({
