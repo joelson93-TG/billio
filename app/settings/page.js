@@ -266,8 +266,15 @@ export default function SettingsPage() {
       handler.open().then(async (response) => {
         console.log("FedaPay transaction validée côté client.", response);
 
-        // 1. Calcul de la nouvelle date de fin (+ X mois à partir d'aujourd'hui)
-        const newEndDate = new Date();
+        // 1. CUMUL DE L'ABONNEMENT
+        const now = new Date();
+        const currentEndDate = subscription.endDate ? new Date(subscription.endDate) : now;
+        
+        // On vérifie si l'abonnement actuel est encore valide dans le futur
+        const baseDate = (currentEndDate > now) ? currentEndDate : now;
+
+        // On ajoute les mois achetés à partir de cette date de base
+        const newEndDate = new Date(baseDate);
         newEndDate.setMonth(newEndDate.getMonth() + plan.months);
 
         try {
@@ -277,10 +284,10 @@ export default function SettingsPage() {
             subscriptionStatus: "active",
             trialEndDate: newEndDate.toISOString(),
             lastPaymentAmount: plan.price,
-            updatedAt: new Date().toISOString()
+            updatedAt: now.toISOString()
           }, { merge: true });
 
-          alert(`Paiement validé avec succès ! Votre abonnement a été activé pour ${plan.duration}.`);
+          alert(`Paiement validé avec succès ! Votre abonnement a été prolongé jusqu'au ${newEndDate.toLocaleDateString("fr-FR")}.`);
         } catch (firestoreError) {
           console.error("Erreur lors de la mise à jour dans Firestore :", firestoreError);
           alert("Paiement validé, mais une erreur s'est produite lors de la mise à jour de l'abonnement. Contactez le support.");
