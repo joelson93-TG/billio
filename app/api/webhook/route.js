@@ -2,30 +2,40 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// LIGNE CRUCIALE : Empêche Next.js d'exécuter ce code pendant le build (évite l'erreur OpenSSL)
 export const dynamic = 'force-dynamic';
 
-// Initialisation sécurisée de Firebase Admin
-if (!getApps().length) {
-  // On vérifie que la variable existe pour ne pas faire crasher le build
-  if (process.env.FIREBASE_PRIVATE_KEY) {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-      }),
-    });
+function getAdminDb() {
+  if (!getApps().length) {
+    if (process.env.FIREBASE_PRIVATE_KEY) {
+      let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+      
+      // Nettoyage des guillemets superflus si présents dans Vercel
+      if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+        privateKey = privateKey.slice(1, -1);
+      }
+      if (privateKey.startsWith("'") && privateKey.endsWith("'")) {
+        privateKey = privateKey.slice(1, -1);
+      }
+      
+      privateKey = privateKey.replace(/\\n/g, '\n');
+
+      initializeApp({
+        credential: cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: privateKey,
+        }),
+      });
+    }
   }
+  return getFirestore();
 }
 
 export async function POST(request) {
   try {
-    // On récupère Firestore uniquement au moment où le webhook est réellement appelé
-    const db = getFirestore();
+    const db = getAdminDb();
     const body = await request.json();
     
-    // Structure FedaPay
     const eventStatus = body.event || body.status;
     const transactionData = body.entity || body.data;
 
@@ -34,7 +44,6 @@ export async function POST(request) {
       const amountPaid = transactionData.amount;
 
       if (userId) {
-        // Mise à jour de Firestore avec les privilèges admin
         const userRef = db.collection('users').doc(userId);
         await userRef.update({
           subscriptionStatus: 'active',
