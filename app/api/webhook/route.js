@@ -6,14 +6,15 @@ export const dynamic = 'force-dynamic';
 
 function getAdminDb() {
   if (!getApps().length) {
-    const rawKey = process.env.FIREBASE_PRIVATE_KEY || "";
-    const formattedKey = rawKey.replace(/\\n/g, '\n');
-
+    // Récupération sécurisée depuis les variables d'environnement de Vercel.
+    // Le .replace est crucial ici pour que Vercel lise correctement les sauts de ligne (\n).
+    const privateKey = (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+    
     initializeApp({
       credential: cert({
-        projectId: "billio-18b5c",
-        clientEmail: "firebase-adminsdk-fbsvc@billio-18b5c.iam.gserviceaccount.com",
-        privateKey: formattedKey,
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: privateKey,
       }),
     });
   }
@@ -22,16 +23,16 @@ function getAdminDb() {
 
 export async function POST(request) {
   try {
+    const db = getAdminDb();
     const body = await request.json();
     
-    const eventStatus = body.event || body.name || body.status;
+    const eventStatus = body.event || body.status;
     const transactionData = body.entity || body.data;
-    const txStatus = transactionData?.status;
 
-    if (eventStatus === 'transaction.approved' || txStatus === 'approved') {
-      const db = getAdminDb();
+    if (eventStatus === 'transaction.approved' || transactionData?.status === 'approved') {
       const amountPaid = transactionData.amount;
       
+      // Récupération de l'ID ou de l'email depuis les données de FedaPay
       let userId = transactionData.metadata?.userId;
       const customerEmail = transactionData.customer?.email || transactionData.metadata?.paid_customer?.email;
 
@@ -40,6 +41,7 @@ export async function POST(request) {
       if (userId) {
         userRef = db.collection('users').doc(userId);
       } else if (customerEmail) {
+        // Recherche du compte par e-mail
         const usersSnapshot = await db.collection('users').where('email', '==', customerEmail).get();
         if (!usersSnapshot.empty) {
           userRef = usersSnapshot.docs[0].ref;
@@ -60,7 +62,7 @@ export async function POST(request) {
       }
     }
 
-    return NextResponse.json({ success: true, message: 'Webhook reçu et ignoré (statut non approuvé).' });
+    return NextResponse.json({ success: true, message: 'Webhook reçu, aucune action nécessaire.' });
   } catch (error) {
     console.error('Erreur webhook :', error);
     return NextResponse.json({ error: error.message || 'Erreur interne du serveur.' }, { status: 500 });
