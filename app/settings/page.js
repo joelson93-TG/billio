@@ -130,32 +130,23 @@ export default function SettingsPage() {
           setPrimaryColor(data.primaryColor || "#2563eb");
         }
 
-        // 4. Écoute en temps réel du statut d'abonnement de l'utilisateur avec Logs
+        // 4. Écoute en temps réel du statut d'abonnement de l'utilisateur
         const userDocRef = doc(db, "users", user.uid);
         unsubscribeUser = onSnapshot(userDocRef, (userSnap) => {
           console.log("--- DEBUG FIREBASE ---");
-          console.log("UID connecté dans le navigateur :", user.uid);
+          console.log("UID connecté :", user.uid);
           
           if (userSnap.exists()) {
             const userData = userSnap.data();
             console.log("Données trouvées dans Firestore :", userData);
             
-            // Récupération de la date de fin (essai ou abonnement actif)
             const endDate = userData.trialEndDate || userData.endDate || null;
-            
-            if (userData.subscription) {
-              setSubscription({ ...userData.subscription, endDate });
-            } else if (userData.subscriptionStatus) {
-              // Si le webhook a mis à jour `subscriptionStatus` directement
-              setSubscription(prev => ({
-                ...prev, 
-                status: userData.subscriptionStatus, 
-                endDate
-              }));
-            } else if (endDate) {
-              // Si on a au moins une date de fin (ex: essai gratuit de base)
-              setSubscription(prev => ({ ...prev, endDate }));
-            }
+            const status = userData.subscriptionStatus || (userData.subscription?.status) || "trial";
+
+            setSubscription({
+              status,
+              endDate,
+            });
           } else {
             console.log("⚠️ Aucun document trouvé dans Firestore pour cet UID !");
           }
@@ -260,7 +251,6 @@ export default function SettingsPage() {
         transaction: {
           amount: plan.price,
           description: `Abonnement Billio - ${plan.duration}`,
-          // Passage des données clés pour que le Webhook les récupère !
           custom_metadata: {
             userId: currentUser.uid,
             planId: plan.id,
@@ -273,11 +263,29 @@ export default function SettingsPage() {
         },
       });
 
-      handler.open().then((response) => {
+      handler.open().then(async (response) => {
         console.log("FedaPay transaction validée côté client.", response);
-        // La modification en base de données se fera de manière sécurisée par le Webhook (serveur).
-        // Le onSnapshot mettra la page à jour automatiquement.
-        alert("Paiement validé avec succès ! Votre compte sera activé dans quelques secondes.");
+
+        // 1. Calcul de la nouvelle date de fin (+ X mois à partir d'aujourd'hui)
+        const newEndDate = new Date();
+        newEndDate.setMonth(newEndDate.getMonth() + plan.months);
+
+        try {
+          // 2. Mise à jour automatique de la souscription dans Firestore
+          const userDocRef = doc(db, "users", currentUser.uid);
+          await setDoc(userDocRef, {
+            subscriptionStatus: "active",
+            trialEndDate: newEndDate.toISOString(),
+            lastPaymentAmount: plan.price,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+
+          alert(`Paiement validé avec succès ! Votre abonnement a été activé pour ${plan.duration}.`);
+        } catch (firestoreError) {
+          console.error("Erreur lors de la mise à jour dans Firestore :", firestoreError);
+          alert("Paiement validé, mais une erreur s'est produite lors de la mise à jour de l'abonnement. Contactez le support.");
+        }
+
       }).catch((error) => {
         console.log("Paiement annulé ou fenêtre fermée :", error);
       });
@@ -305,7 +313,7 @@ export default function SettingsPage() {
 
         <div className="p-6 max-w-4xl mx-auto w-full pb-12 space-y-6">
           
-          {/* SECTION ABONNEMENT COMPACTE ET CLIQUABLE */}
+          {/* SECTION ABONNEMENT */}
           <div className="bg-slate-900 text-white rounded-2xl p-6 shadow-lg">
             <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
               <div>
@@ -315,7 +323,6 @@ export default function SettingsPage() {
                 <h2 className="text-base font-bold">Mon Espace Billio</h2>
               </div>
               <p className="text-xs text-slate-400">
-                {/* Affichage dynamique des jours restants calculés */}
                 {subscription.endDate 
                   ? `${getDaysRemaining(subscription.endDate)} jours restants` 
                   : "30 jours restants"}
