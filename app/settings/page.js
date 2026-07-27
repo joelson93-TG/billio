@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, setDoc, onSnapshot, collection, addDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/firebase";
 
 export default function SettingsPage() {
@@ -121,6 +121,9 @@ export default function SettingsPage() {
             const userData = userSnap.data();
             if (userData.subscription) {
               setSubscription(userData.subscription);
+            } else if (userData.subscriptionStatus) {
+              // Si le webhook a mis à jour `subscriptionStatus` directement
+              setSubscription(prev => ({...prev, status: userData.subscriptionStatus}));
             }
           }
         });
@@ -224,6 +227,12 @@ export default function SettingsPage() {
         transaction: {
           amount: plan.price,
           description: `Abonnement Billio - ${plan.duration}`,
+          // Passage des données clés pour que le Webhook les récupère !
+          custom_metadata: {
+            userId: currentUser.uid,
+            planId: plan.id,
+            months: plan.months
+          }
         },
         customer: {
           email: email || currentUser?.email || "client@jblessconsulting.com",
@@ -231,44 +240,11 @@ export default function SettingsPage() {
         },
       });
 
-      handler.open().then(async (response) => {
-        console.log("FedaPay transaction validée, traitement post-paiement...", response);
-        try {
-          const newSubscription = {
-            status: "active",
-            planId: plan.id,
-            months: plan.months,
-            activatedAt: new Date().toISOString(),
-          };
-
-          // 1. Mettre à jour le profil de l'utilisateur
-          const userDocRef = doc(db, "users", currentUser.uid);
-          await setDoc(
-            userDocRef,
-            { subscription: newSubscription },
-            { merge: true }
-          );
-          console.log("Statut d'abonnement mis à jour dans users/{uid}");
-
-          // 2. Enregistrer la transaction globale (accessible pour l'admin) avec le montant
-          await addDoc(collection(db, "transactions"), {
-            userId: currentUser.uid,
-            email: email || currentUser?.email || "",
-            companyName: companyName || "Client",
-            amount: plan.price,
-            planId: plan.id,
-            duration: plan.duration,
-            createdAt: new Date().toISOString(),
-            status: "approved",
-          });
-          console.log("Transaction enregistrée dans la collection 'transactions'");
-
-          setSubscription(newSubscription);
-          alert("Paiement validé avec succès ! Votre abonnement est maintenant actif.");
-        } catch (error) {
-          console.error("Erreur lors de l'enregistrement post-paiement dans Firestore :", error);
-          alert("Paiement réussi, mais une erreur est survenue lors de la mise à jour de votre compte.");
-        }
+      handler.open().then((response) => {
+        console.log("FedaPay transaction validée côté client.", response);
+        // La modification en base de données se fera de manière sécurisée par le Webhook (serveur).
+        // Le onSnapshot mettra la page à jour automatiquement.
+        alert("Paiement validé avec succès ! Votre compte sera activé dans quelques secondes.");
       }).catch((error) => {
         console.log("Paiement annulé ou fenêtre fermée :", error);
       });
