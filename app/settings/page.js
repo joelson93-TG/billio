@@ -6,6 +6,22 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/firebase";
 
+// Fonction pour calculer dynamiquement les jours restants
+const getDaysRemaining = (endDateString) => {
+  if (!endDateString) return 0;
+  
+  const endDate = new Date(endDateString);
+  const today = new Date();
+  
+  // Calcul de la différence en millisecondes
+  const diffTime = endDate.getTime() - today.getTime();
+  
+  // Conversion en jours (arrondi au supérieur)
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  return diffDays > 0 ? diffDays : 0;
+};
+
 export default function SettingsPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState(null);
@@ -32,10 +48,10 @@ export default function SettingsPage() {
   const [cnss, setCnss] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#2563eb");
 
-  // Infos abonnement
+  // Infos abonnement avec gestion de la date d'expiration
   const [subscription, setSubscription] = useState({
     status: "trial",
-    daysLeft: 30,
+    endDate: null,
   });
 
   // Construction des plans dynamiques basés sur les données de l'admin
@@ -114,17 +130,34 @@ export default function SettingsPage() {
           setPrimaryColor(data.primaryColor || "#2563eb");
         }
 
-        // Écoute en temps réel du statut d'abonnement de l'utilisateur
+        // 4. Écoute en temps réel du statut d'abonnement de l'utilisateur avec Logs
         const userDocRef = doc(db, "users", user.uid);
         unsubscribeUser = onSnapshot(userDocRef, (userSnap) => {
+          console.log("--- DEBUG FIREBASE ---");
+          console.log("UID connecté dans le navigateur :", user.uid);
+          
           if (userSnap.exists()) {
             const userData = userSnap.data();
+            console.log("Données trouvées dans Firestore :", userData);
+            
+            // Récupération de la date de fin (essai ou abonnement actif)
+            const endDate = userData.trialEndDate || userData.endDate || null;
+            
             if (userData.subscription) {
-              setSubscription(userData.subscription);
+              setSubscription({ ...userData.subscription, endDate });
             } else if (userData.subscriptionStatus) {
               // Si le webhook a mis à jour `subscriptionStatus` directement
-              setSubscription(prev => ({...prev, status: userData.subscriptionStatus}));
+              setSubscription(prev => ({
+                ...prev, 
+                status: userData.subscriptionStatus, 
+                endDate
+              }));
+            } else if (endDate) {
+              // Si on a au moins une date de fin (ex: essai gratuit de base)
+              setSubscription(prev => ({ ...prev, endDate }));
             }
+          } else {
+            console.log("⚠️ Aucun document trouvé dans Firestore pour cet UID !");
           }
         });
       } catch (error) {
@@ -276,13 +309,16 @@ export default function SettingsPage() {
           <div className="bg-slate-900 text-white rounded-2xl p-6 shadow-lg">
             <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
               <div>
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 mb-1">
-                  {subscription.status === "trial" ? "Essai gratuit" : "Abonné"}
+                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider mb-1 ${subscription.status === "active" ? "bg-green-500/20 text-green-400" : "bg-blue-500/20 text-blue-400"}`}>
+                  {subscription.status === "active" ? "Abonné" : "Essai gratuit"}
                 </span>
                 <h2 className="text-base font-bold">Mon Espace Billio</h2>
               </div>
               <p className="text-xs text-slate-400">
-                {subscription.status === "trial" ? `${subscription.daysLeft || 30} jours restants` : "Actif"}
+                {/* Affichage dynamique des jours restants calculés */}
+                {subscription.endDate 
+                  ? `${getDaysRemaining(subscription.endDate)} jours restants` 
+                  : "30 jours restants"}
               </p>
             </div>
 
