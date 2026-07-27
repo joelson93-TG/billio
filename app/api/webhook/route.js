@@ -9,15 +9,8 @@ function getAdminDb() {
     if (process.env.FIREBASE_PRIVATE_KEY) {
       let privateKey = process.env.FIREBASE_PRIVATE_KEY;
       
-      // Nettoyage des guillemets superflus si présents dans Vercel
-      if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-        privateKey = privateKey.slice(1, -1);
-      }
-      if (privateKey.startsWith("'") && privateKey.endsWith("'")) {
-        privateKey = privateKey.slice(1, -1);
-      }
-      
-      privateKey = privateKey.replace(/\\n/g, '\n');
+      // Nettoyage robuste : enlève les guillemets et convertit proprement les \n en sauts de ligne réels
+      privateKey = privateKey.replace(/^["']|["']$/g, '').replace(/\\n/g, '\n');
 
       initializeApp({
         credential: cert({
