@@ -1,6 +1,6 @@
 // firebase.js
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, initializeAuth, browserLocalPersistence, inMemoryPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
@@ -14,10 +14,28 @@ const firebaseConfig = {
   measurementId: "G-5E913KEBVL"
 };
 
-// Initialisation sécurisée de Firebase (évite les erreurs au rechargement sous Next.js)
+// Initialisation sécurisée de l'application Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
 
-const auth = getAuth(app);
+// Initialisation ultra-robuste de l'Auth pour éviter les plantages sur Safari / iPad
+let auth;
+try {
+  // Tentative avec la persistance locale standard
+  auth = initializeAuth(app, {
+    persistence: browserLocalPersistence,
+  });
+} catch (e) {
+  try {
+    // Si déjà initialisé par un autre module, on récupère l'instance
+    auth = getAuth(app);
+  } catch (err) {
+    // Fallback de secours en mémoire si le stockage de l'iPad bloque tout
+    auth = initializeAuth(app, {
+      persistence: inMemoryPersistence,
+    });
+  }
+}
+
 const db = getFirestore(app);
 
 let analytics = null;
@@ -26,6 +44,8 @@ if (typeof window !== "undefined") {
     if (supported) {
       analytics = getAnalytics(app);
     }
+  }).catch(() => {
+    // Ignore les erreurs d'analytics sur les navigateurs stricts
   });
 }
 
