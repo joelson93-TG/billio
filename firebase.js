@@ -1,4 +1,4 @@
-// firebase.js
+// firebase.js (ou firebase.ts)
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, initializeAuth, browserLocalPersistence, inMemoryPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
@@ -17,25 +17,30 @@ const firebaseConfig = {
 // Initialisation sécurisée de l'application Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
 
-// Initialisation ultra-robuste de l'Auth pour éviter les plantages sur Safari / iPad
-let auth;
-try {
-  // Tentative avec la persistance locale standard
-  auth = initializeAuth(app, {
-    persistence: browserLocalPersistence,
-  });
-} catch (e) {
+// Utilisation d'une fonction pour initialiser l'Auth.
+// Cela résout l'erreur de type "any" car le compilateur comprend
+// exactement ce que la fonction retourne.
+const initializeFirebaseAuth = () => {
   try {
-    // Si déjà initialisé par un autre module, on récupère l'instance
-    auth = getAuth(app);
-  } catch (err) {
-    // Fallback de secours en mémoire si le stockage de l'iPad bloque tout
-    auth = initializeAuth(app, {
-      persistence: inMemoryPersistence,
+    // Tentative avec la persistance locale standard
+    return initializeAuth(app, {
+      persistence: browserLocalPersistence,
     });
+  } catch (e) {
+    try {
+      // Si déjà initialisé par un autre module, on récupère l'instance
+      return getAuth(app);
+    } catch (err) {
+      // Fallback de secours en mémoire si le stockage de l'iPad bloque tout
+      return initializeAuth(app, {
+        persistence: inMemoryPersistence,
+      });
+    }
   }
-}
+};
 
+// auth possède maintenant un type strict et Next.js validera le build
+const auth = initializeFirebaseAuth();
 const db = getFirestore(app);
 
 let analytics = null;
