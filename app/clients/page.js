@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, addDoc, deleteDoc, doc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../../firebase";
 
 export default function ClientsPage() {
@@ -13,6 +13,7 @@ export default function ClientsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
   const router = useRouter();
 
   // État du formulaire
@@ -80,22 +81,54 @@ export default function ClientsPage() {
       }, 0);
   };
 
-  // Fonction pour ajouter un client
-  const handleAddClient = async (e) => {
+  // Ouverture du modal pour ajouter un client
+  const handleOpenAddModal = () => {
+    setEditingClient(null);
+    setNewClient({ name: "", email: "", phone: "", address: "", taxId: "" });
+    setIsModalOpen(true);
+  };
+
+  // Ouverture du modal pour modifier un client
+  const handleOpenEditModal = (client) => {
+    setEditingClient(client);
+    setNewClient({
+      name: client.name || "",
+      email: client.email || "",
+      phone: client.phone || "",
+      address: client.address || "",
+      taxId: client.taxId || ""
+    });
+    setIsModalOpen(true);
+  };
+
+  // Fonction pour enregistrer (Ajouter ou Modifier) un client
+  const handleSaveClient = async (e) => {
     e.preventDefault();
     if (!user) return;
     setIsSubmitting(true);
     try {
-      const clientsRef = collection(db, "users", user.uid, "customers");
-      await addDoc(clientsRef, {
-        ...newClient,
-        createdAt: serverTimestamp()
-      });
+      if (editingClient) {
+        // Modification
+        const clientRef = doc(db, "users", user.uid, "customers", editingClient.id);
+        await updateDoc(clientRef, {
+          ...newClient,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        // Ajout
+        const clientsRef = collection(db, "users", user.uid, "customers");
+        await addDoc(clientsRef, {
+          ...newClient,
+          createdAt: serverTimestamp()
+        });
+      }
       
       setNewClient({ name: "", email: "", phone: "", address: "", taxId: "" });
+      setEditingClient(null);
       setIsModalOpen(false);
     } catch (error) {
-      console.error("Erreur lors de l'ajout du client:", error);
+      console.error("Erreur lors de l'enregistrement du client:", error);
+      alert("Une erreur est survenue lors de l'enregistrement.");
     }
     setIsSubmitting(false);
   };
@@ -174,7 +207,7 @@ export default function ClientsPage() {
                 <th>Nom / Entreprise</th>
                 <th>Contact</th>
                 <th>NIF / RCCM</th>
-                <th style="text-align: right;">Solde Restant Dû</th>
+                <th style="text-align: right; white-space: nowrap;">Solde Restant Dû</th>
               </tr>
             </thead>
             <tbody>
@@ -185,7 +218,7 @@ export default function ClientsPage() {
                     <td><strong>${c.name || 'N/A'}</strong><br><span style="color:#64748b; font-size:11px;">${c.address || ''}</span></td>
                     <td>${c.email || '—'}<br><span style="color:#64748b; font-size:11px;">${c.phone || ''}</span></td>
                     <td>${c.taxId || '—'}</td>
-                    <td style="text-align: right; font-weight: bold; color: ${balance > 0 ? '#e11d48' : '#059669'};">
+                    <td style="text-align: right; font-weight: bold; color: ${balance > 0 ? '#e11d48' : '#059669'}; white-space: nowrap;">
                       ${balance.toLocaleString()} FCFA
                     </td>
                   </tr>
@@ -232,7 +265,7 @@ export default function ClientsPage() {
               <span className="hidden sm:inline">Imprimer</span>
             </button>
             <button 
-              onClick={() => setIsModalOpen(true)}
+              onClick={handleOpenAddModal}
               className="px-3 md:px-5 py-2 md:py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/30 flex items-center gap-1"
             >
               <span className="text-lg leading-none">+</span>
@@ -278,7 +311,12 @@ export default function ClientsPage() {
                       <div className="flex justify-between items-center pt-3 border-t border-gray-50 mt-1">
                         <span className="text-xs text-gray-400">NIF: {client.taxId || "—"}</span>
                         <div className="flex gap-4">
-                          <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">Modifier</button>
+                          <button 
+                            onClick={() => handleOpenEditModal(client)}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          >
+                            Modifier
+                          </button>
                           <button 
                             onClick={() => handleDeleteClient(client)}
                             className="text-rose-600 hover:text-rose-800 text-sm font-medium"
@@ -300,7 +338,7 @@ export default function ClientsPage() {
                       <th className="px-6 py-4">Nom / Entreprise</th>
                       <th className="px-6 py-4">Contact</th>
                       <th className="px-6 py-4">NIF / RCCM</th>
-                      <th className="px-6 py-4">Solde Restant Dû</th>
+                      <th className="px-6 py-4 whitespace-nowrap">Solde Restant Dû</th>
                       <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -320,21 +358,28 @@ export default function ClientsPage() {
                           <td className="px-6 py-4 text-sm text-gray-600">
                             {client.taxId || "—"}
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
                               balanceDue > 0 ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             }`}>
                               {balanceDue.toLocaleString()} FCFA
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-right space-x-3">
-                            <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">Modifier</button>
-                            <button 
-                              onClick={() => handleDeleteClient(client)}
-                              className="text-rose-600 hover:text-rose-800 text-sm font-medium"
-                            >
-                              Supprimer
-                            </button>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-3 text-sm font-medium">
+                              <button 
+                                onClick={() => handleOpenEditModal(client)}
+                                className="text-blue-600 hover:text-blue-800 transition-colors"
+                              >
+                                Modifier
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteClient(client)}
+                                className="text-rose-600 hover:text-rose-800 transition-colors"
+                              >
+                                Supprimer
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -347,18 +392,20 @@ export default function ClientsPage() {
         </div>
       </main>
 
-      {/* Fenêtre Modale : Ajouter un client */}
+      {/* Fenêtre Modale : Ajouter / Modifier un client */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm transition-opacity">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 sm:fade-in sm:zoom-in duration-200 max-h-[90vh] flex flex-col">
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
-              <h3 className="text-lg font-bold text-gray-900">Ajouter un client</h3>
+              <h3 className="text-lg font-bold text-gray-900">
+                {editingClient ? "Modifier le client" : "Ajouter un client"}
+              </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
             
-            <form onSubmit={handleAddClient} className="p-5 space-y-4 overflow-y-auto">
+            <form onSubmit={handleSaveClient} className="p-5 space-y-4 overflow-y-auto">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nom de l'entreprise ou du client *</label>
                 <input type="text" required value={newClient.name} onChange={(e) => setNewClient({...newClient, name: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" placeholder="Ex: Entreprise ABC" />

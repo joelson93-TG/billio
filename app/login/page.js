@@ -26,12 +26,13 @@ export default function LoginPage() {
   };
 
   return (
-    /* Parent container : flex-col sur mobile, flex-row sur desktop */
-    <div className="min-h-screen flex flex-col lg:flex-row w-full bg-gradient-to-br from-blue-600 via-indigo-700 to-indigo-900 font-sans overflow-hidden">
+    /* Parent container : Centré sur mobile avec padding, plein écran étiré sur desktop */
+    <div className="min-h-screen flex items-center justify-center lg:items-stretch lg:justify-start lg:flex-row w-full bg-gradient-to-br from-blue-600 via-indigo-700 to-indigo-900 font-sans overflow-hidden p-4 sm:p-8 lg:p-0">
       
-      {/* Panneau de Gauche : Formulaire de Connexion */}
-      <div className="w-full lg:w-1/2 min-h-screen lg:min-h-0 flex items-center justify-center bg-white px-6 py-12 sm:p-12 lg:p-20 xl:p-24 relative z-10 lg:rounded-r-[3.5rem] shadow-[25px_0_50px_-12px_rgba(0,0,0,0.3)] transition-all duration-300">
-        <div className="w-full max-w-md space-y-8">
+      {/* Panneau de Gauche : Carte flottante sur mobile, panneau latéral sur desktop */}
+      <div className="w-full max-w-md lg:max-w-none lg:w-1/2 flex items-center justify-center bg-white px-6 py-10 sm:p-10 lg:p-20 xl:p-24 relative z-10 rounded-[2rem] lg:rounded-none lg:rounded-r-[3.5rem] shadow-2xl lg:shadow-[25px_0_50px_-12px_rgba(0,0,0,0.3)] transition-all duration-300 lg:min-h-screen">
+        
+        <div className="w-full max-w-sm lg:max-w-md space-y-8">
           
           {/* En-tête du formulaire */}
           <div>
@@ -45,14 +46,14 @@ export default function LoginPage() {
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">
               Bon retour 👋
             </h2>
-            <p className="mt-3 text-base text-gray-500">
+            <p className="mt-3 text-sm sm:text-base text-gray-500">
               Connectez-vous pour gérer votre facturation en toute simplicité.
             </p>
           </div>
 
           {/* Affichage des erreurs */}
           {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
               <svg className="h-5 w-5 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
@@ -67,8 +68,8 @@ export default function LoginPage() {
                 Email professionnel
               </label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400 group-focus-within:text-blue-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                   </svg>
                 </div>
@@ -82,7 +83,8 @@ export default function LoginPage() {
                   required
                   disabled={isLoading}
                   placeholder="nom@entreprise.com"
-                  className="block w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl text-gray-900 bg-gray-50/50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-transparent transition-all duration-200 ease-in-out disabled:opacity-60 disabled:cursor-not-allowed"
+                  /* text-base sur mobile empêche le zoom auto d'iOS, text-sm sur desktop */
+                  className="block w-full appearance-none pl-12 pr-4 py-4 sm:py-3.5 border border-gray-200 rounded-xl text-gray-900 bg-gray-50/50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white focus:border-transparent transition-all duration-200 ease-in-out disabled:opacity-60 disabled:cursor-not-allowed text-base sm:text-sm"
                 />
               </div>
             </div>
@@ -93,12 +95,12 @@ export default function LoginPage() {
                   Mot de passe
                 </label>
                 <a href="/forgot-password" className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors">
-                  Mot de passe Oublié ?
+                  Oublié ?
                 </a>
               </div>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400 group-focus-within:text-blue-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </div>
@@ -112,7 +114,7 @@ export default function LoginPage() {
                   required
                   disabled={isLoading}
                   placeholder="••••••••"
-                  className="block w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl text-gray-900 bg-gray-50/50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-transparent transition-all duration-200 ease-in-out disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="block w-full appearance-none pl-12 pr-4 py-4 sm:py-3.5 border border-gray-200 rounded-xl text-gray-900 bg-gray-50/50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white focus:border-transparent transition-all duration-200 ease-in-out disabled:opacity-60 disabled:cursor-not-allowed text-base sm:text-sm"
                 />
               </div>
             </div>
@@ -120,7 +122,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex justify-center items-center gap-2 mt-2 py-3.5 px-4 border border-transparent rounded-xl shadow-lg shadow-blue-500/30 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 ease-in-out active:scale-[0.98] hover:-translate-y-0.5 hover:shadow-blue-500/50 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
+              className="w-full flex justify-center items-center gap-2 mt-4 py-4 sm:py-3.5 px-4 border border-transparent rounded-xl shadow-lg shadow-blue-600/30 text-base sm:text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 transition-all duration-200 ease-in-out active:scale-[0.98] hover:-translate-y-0.5 hover:shadow-blue-600/50 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
             >
               {isLoading ? (
                 <>
@@ -128,7 +130,7 @@ export default function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span>Connexion en cours...</span>
+                  <span>Connexion...</span>
                 </>
               ) : (
                 "Se connecter"
