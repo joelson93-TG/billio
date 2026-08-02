@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, getDocs, addDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
 import { useSubscription } from "@/components/SubscriptionProvider";
 
@@ -16,6 +16,7 @@ export default function NewInvoicePage() {
   const [showPreview, setShowPreview] = useState(false);
 
   const [customers, setCustomers] = useState([]);
+  const [companyData, setCompanyData] = useState(null); // Contient les infos de settings/company
   
   // State pour le type de document
   const [documentType, setDocumentType] = useState("invoice"); // "invoice" | "proforma"
@@ -47,6 +48,14 @@ export default function NewInvoicePage() {
       setCurrentUser(user);
 
       try {
+        // 1. NOUVEAU CHEMIN : Récupérer les infos de l'entreprise depuis settings/company
+        const companyDocRef = doc(db, "users", user.uid, "settings", "company");
+        const companyDocSnap = await getDoc(companyDocRef);
+        if (companyDocSnap.exists()) {
+          setCompanyData(companyDocSnap.data());
+        }
+
+        // 2. Récupérer les clients
         const custSnap = await getDocs(collection(db, "users", user.uid, "customers"));
         const customersList = custSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setCustomers(customersList);
@@ -54,6 +63,7 @@ export default function NewInvoicePage() {
           setSelectedClientId(customersList[0].id);
         }
 
+        // 3. Récupérer les factures pour le numéro séquentiel
         const invSnap = await getDocs(collection(db, "users", user.uid, "invoices"));
         const docs = invSnap.docs.map(d => d.data());
         setAllInvoicesData(docs);
@@ -75,7 +85,6 @@ export default function NewInvoicePage() {
     const currentYear = new Date().getFullYear();
     const prefix = documentType === "proforma" ? "PRO" : "FAC";
     
-    // Récupérer l'ensemble des numéros existants pour éviter les collisions
     const existingNumbers = new Set(allInvoicesData.map(inv => inv.number));
 
     let counter = allInvoicesData.filter(inv => {
@@ -86,7 +95,6 @@ export default function NewInvoicePage() {
     let newNumber = "";
     let isUnique = false;
 
-    // Boucle de sécurité pour s'assurer que le numéro généré n'existe pas déjà
     while (!isUnique) {
       const sequentialNum = String(counter).padStart(3, '0');
       newNumber = `${prefix}-${currentYear}-${sequentialNum}`;
@@ -119,7 +127,7 @@ export default function NewInvoicePage() {
   const handleOpenPreview = (e) => {
     e.preventDefault();
     if (isExpired) {
-      alert("Votre abonnement SaaS a expiré. Veuillez le renouveler pour créer de nouveaux documents.");
+      alert("Votre abonnement a expiré. Veuillez le renouveler pour créer de nouveaux documents.");
       return;
     }
     setShowPreview(true);
@@ -177,6 +185,9 @@ export default function NewInvoicePage() {
   }
 
   const selectedCustomerObj = customers.find((c) => c.id === selectedClientId);
+  
+  // Utiliser la couleur principale des paramètres si elle existe
+  const mainColor = companyData?.primaryColor || "#2563eb";
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-16">
@@ -196,7 +207,6 @@ export default function NewInvoicePage() {
         
         <form onSubmit={handleOpenPreview} className="space-y-6">
           
-          {/* Sélecteur de type de document */}
           <div className="flex gap-4 p-1 bg-gray-100 rounded-xl w-max">
             <button
               type="button"
@@ -233,7 +243,6 @@ export default function NewInvoicePage() {
             </div>
           </div>
 
-          {/* Table des prestations */}
           <div className="pt-4 border-t">
             <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide mb-3">Désignation des prestations / produits</h2>
             {items.map((item) => (
@@ -252,7 +261,6 @@ export default function NewInvoicePage() {
             </button>
           </div>
 
-          {/* Section fiscale */}
           <div className="grid grid-cols-3 gap-4 pt-4 border-t bg-gray-50 p-4 rounded-xl">
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Remise (Montant F CFA)</label>
@@ -287,7 +295,7 @@ export default function NewInvoicePage() {
               <div className="flex justify-between font-bold text-gray-800 pt-1 border-t"><span>Total HT :</span> <span>{totalHt.toLocaleString("fr-FR")} F CFA</span></div>
               {hasTva && <div className="flex justify-between text-gray-600"><span>TVA ({tvaRate}%) :</span> <span>{calculatedTvaAmount.toLocaleString("fr-FR")} F CFA</span></div>}
               {hasRsps && <div className="flex justify-between text-amber-700"><span>RSPS ({rspsRate}%) :</span> <span>- {calculatedRspsAmount.toLocaleString("fr-FR")} F CFA</span></div>}
-              <div className="flex justify-between text-base font-extrabold pt-3 border-t border-gray-200 text-blue-600"><span>Net à Payer (TTC) :</span> <span>{totalTtc.toLocaleString("fr-FR")} F CFA</span></div>
+              <div className="flex justify-between text-base font-extrabold pt-3 border-t border-gray-200" style={{ color: mainColor }}><span>Net à Payer (TTC) :</span> <span>{totalTtc.toLocaleString("fr-FR")} F CFA</span></div>
             </div>
           </div>
         </form>
@@ -298,12 +306,18 @@ export default function NewInvoicePage() {
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto print:bg-white print:p-0">
           <div className="bg-white rounded-2xl max-w-3xl w-full p-10 space-y-8 shadow-2xl relative my-8 border border-gray-100 print:shadow-none print:border-none print:m-0 print:w-full">
             <div className="flex justify-between items-start border-b pb-6">
-              <div>
-                <span className="text-2xl font-black text-blue-600 tracking-tight">
+              
+              <div className="flex flex-col gap-2">
+                {/* Affichage du logo de l'entreprise s'il existe */}
+                {companyData?.logoUrl && (
+                  <img src={companyData.logoUrl} alt="Logo" className="h-16 w-auto object-contain mb-2" />
+                )}
+                <span className="text-2xl font-black tracking-tight" style={{ color: mainColor }}>
                   {documentType === "proforma" ? "FACTURE PROFORMA" : "FACTURE"}
                 </span>
-                <p className="text-sm font-semibold text-gray-700 mt-1">{invoiceNumber}</p>
+                <p className="text-sm font-semibold text-gray-700">{invoiceNumber}</p>
               </div>
+
               <div className="text-right">
                 <p className="text-sm font-bold text-gray-800">Date d'émission</p>
                 <p className="text-sm text-gray-500">{new Date(invoiceDate).toLocaleDateString('fr-FR')}</p>
@@ -313,11 +327,23 @@ export default function NewInvoicePage() {
             <div className="grid grid-cols-2 gap-8 text-sm">
               <div>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Émetteur</p>
-                <p className="font-bold text-gray-900">JBLESS CONSULTING</p>
-                <p className="text-gray-500 text-xs mt-0.5">Akato non loin du catholique</p>
-                <p className="text-gray-500 text-xs">Lomé, Togo</p>
-                <p className="text-gray-500 text-xs mt-1">Tél : 97428298</p>
+                {/* On utilise companyName du document settings */}
+                <p className="font-bold text-gray-900">{companyData?.companyName || "Nom de l'entreprise non défini"}</p>
+                {companyData?.address && <p className="text-gray-500 text-xs mt-0.5">{companyData.address}</p>}
+                {companyData?.phone && <p className="text-gray-500 text-xs mt-1">Tél : {companyData.phone}</p>}
+                {companyData?.email && <p className="text-gray-500 text-xs mt-0.5">Email : {companyData.email}</p>}
+                {companyData?.website && <p className="text-gray-500 text-xs mt-0.5">Web : {companyData.website}</p>}
+                
+                {/* Informations Légales */}
+                {(companyData?.nif || companyData?.rccm || companyData?.cnss) && (
+                  <div className="mt-2 pt-2 border-t border-gray-100">
+                    {companyData?.nif && <p className="text-gray-500 text-[11px]">NIF : {companyData.nif}</p>}
+                    {companyData?.rccm && <p className="text-gray-500 text-[11px]">RCCM : {companyData.rccm}</p>}
+                    {companyData?.cnss && <p className="text-gray-500 text-[11px]">CNSS : {companyData.cnss}</p>}
+                  </div>
+                )}
               </div>
+
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Facturé à :</p>
                 <p className="font-bold text-gray-900">{selectedCustomerObj?.name || selectedCustomerObj?.businessName || "Client"}</p>
@@ -356,11 +382,10 @@ export default function NewInvoicePage() {
                 <div className="flex justify-between font-bold text-gray-900 pt-1.5 border-t"><span>Total HT :</span><span>{totalHt.toLocaleString('fr-FR')} F CFA</span></div>
                 {hasTva && <div className="flex justify-between text-gray-600"><span>TVA ({tvaRate}%) :</span><span>{calculatedTvaAmount.toLocaleString('fr-FR')} F CFA</span></div>}
                 {hasRsps && <div className="flex justify-between text-amber-700"><span>RSPS ({rspsRate}%) :</span><span>- {calculatedRspsAmount.toLocaleString('fr-FR')} F CFA</span></div>}
-                <div className="flex justify-between text-sm font-extrabold pt-3 border-t-2 border-gray-200 text-blue-600"><span>Net à Payer (TTC) :</span><span>{totalTtc.toLocaleString('fr-FR')} F CFA</span></div>
+                <div className="flex justify-between text-sm font-extrabold pt-3 border-t-2 border-gray-200" style={{ color: mainColor }}><span>Net à Payer (TTC) :</span><span>{totalTtc.toLocaleString('fr-FR')} F CFA</span></div>
               </div>
             </div>
 
-            {/* Mention légale SYSCOHADA / B2B pour Proforma */}
             {documentType === "proforma" && (
               <div className="mt-8 pt-6 border-t text-[10px] text-gray-500 text-center font-medium">
                 * Ce document est une facture proforma établie à titre indicatif et ne constitue pas une demande de paiement définitif. Il n'a aucune valeur comptable.
