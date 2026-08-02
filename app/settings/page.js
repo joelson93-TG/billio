@@ -261,41 +261,51 @@ export default function SettingsPage() {
           email: email || currentUser?.email || "client@jblessconsulting.com",
           firstname: companyName || "Client",
         },
-      });
+        onComplete: async (response) => {
+          console.log("Retour de FedaPay :", response);
 
-      handler.open().then(async (response) => {
-        console.log("FedaPay transaction validée côté client.", response);
+          // Si l'utilisateur a annulé ou fermé la fenêtre sans finaliser le paiement
+          if (response.reason !== 'checkout_completed') {
+            console.log("L'utilisateur a annulé ou fermé la fenêtre.");
+            return; 
+          }
 
-        // 1. CUMUL DE L'ABONNEMENT
-        const now = new Date();
-        const currentEndDate = subscription.endDate ? new Date(subscription.endDate) : now;
-        
-        // On vérifie si l'abonnement actuel est encore valide dans le futur
-        const baseDate = (currentEndDate > now) ? currentEndDate : now;
+          if (response.transaction && response.transaction.status !== 'approved') {
+            alert("Le paiement a échoué ou a été refusé par la banque.");
+            return;
+          }
 
-        // On ajoute les mois achetés à partir de cette date de base
-        const newEndDate = new Date(baseDate);
-        newEndDate.setMonth(newEndDate.getMonth() + plan.months);
+          // 1. CUMUL DE L'ABONNEMENT
+          const now = new Date();
+          const currentEndDate = subscription.endDate ? new Date(subscription.endDate) : now;
+          
+          const baseDate = (currentEndDate > now) ? currentEndDate : now;
 
-        try {
-          // 2. Mise à jour automatique de la souscription dans Firestore
-          const userDocRef = doc(db, "users", currentUser.uid);
-          await setDoc(userDocRef, {
-            subscriptionStatus: "active",
-            trialEndDate: newEndDate.toISOString(),
-            lastPaymentAmount: plan.price,
-            updatedAt: now.toISOString()
-          }, { merge: true });
+          const newEndDate = new Date(baseDate);
+          newEndDate.setMonth(newEndDate.getMonth() + plan.months);
 
-          alert(`Paiement validé avec succès ! Votre abonnement a été prolongé jusqu'au ${newEndDate.toLocaleDateString("fr-FR")}.`);
-        } catch (firestoreError) {
-          console.error("Erreur lors de la mise à jour dans Firestore :", firestoreError);
-          alert("Paiement validé, mais une erreur s'est produite lors de la mise à jour de l'abonnement. Contactez le support.");
+          try {
+            // 2. Mise à jour automatique de la souscription dans Firestore
+            const userDocRef = doc(db, "users", currentUser.uid);
+            await setDoc(userDocRef, {
+              subscriptionStatus: "active",
+              trialEndDate: newEndDate.toISOString(),
+              lastPaymentAmount: plan.price,
+              updatedAt: now.toISOString()
+            }, { merge: true });
+
+            alert(`Paiement validé avec succès ! Votre abonnement a été prolongé jusqu'au ${newEndDate.toLocaleDateString("fr-FR")}.`);
+          } catch (firestoreError) {
+            console.error("Erreur lors de la mise à jour dans Firestore :", firestoreError);
+            alert("Paiement validé, mais une erreur s'est produite lors de la mise à jour de l'abonnement. Contactez le support.");
+          }
+        },
+        onClose: () => {
+          console.log("Fenêtre de paiement fermée.");
         }
-
-      }).catch((error) => {
-        console.log("Paiement annulé ou fenêtre fermée :", error);
       });
+
+      handler.open();
 
     } catch (error) {
       console.error("Erreur d'initialisation FedaPay :", error);

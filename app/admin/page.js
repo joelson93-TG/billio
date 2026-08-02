@@ -22,11 +22,14 @@ import {
 const IconOverview = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
 const IconUsers = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
 const IconPricing = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
+const IconMenu = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>;
+const IconClose = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
 
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSavingPricing, setIsSavingPricing] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -65,7 +68,6 @@ export default function AdminDashboardPage() {
     try {
       setIsLoading(true);
       
-      // 1. Charger les tarifs en premier pour les utiliser dans le calcul du CA
       const pricingRef = doc(db, "config", "pricing");
       const pricingSnap = await getDoc(pricingRef);
       let currentPricing = { ...pricing };
@@ -75,7 +77,6 @@ export default function AdminDashboardPage() {
         setPricing(currentPricing);
       }
 
-      // 2. Charger les utilisateurs
       const usersSnap = await getDocs(collection(db, "users"));
       let total = 0, active = 0, trial = 0, expired = 0, revenue = 0;
       const loadedUsers = [];
@@ -140,7 +141,7 @@ export default function AdminDashboardPage() {
         updatedAt: new Date().toISOString(),
       }, { merge: true });
       alert("Grille tarifaire mise à jour avec succès !");
-      await loadAdminData(); // Recharger les données pour actualiser le CA estimé
+      await loadAdminData();
     } catch (error) {
       console.error("Erreur tarifs :", error);
     } finally {
@@ -153,13 +154,17 @@ export default function AdminDashboardPage() {
     router.push("/login");
   };
 
+  const changeTab = (tab) => {
+    setActiveTab(tab);
+    setIsMobileMenuOpen(false); // Ferme le menu sur mobile lors du clic
+  };
+
   const filteredUsers = usersList.filter((user) => {
     const matchesStatus = filterStatus === "all" || user.status === filterStatus;
     const matchesSearch = user.companyName.toLowerCase().includes(searchTerm.toLowerCase()) || user.email.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
-  // Données pour les graphiques Recharts
   const statusChartData = [
     { name: "Actifs", value: stats.activeUsers, color: "#10B981" },
     { name: "En Essai", value: stats.trialUsers, color: "#F59E0B" },
@@ -187,36 +192,50 @@ export default function AdminDashboardPage() {
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-100 flex font-sans selection:bg-blue-500/30">
       
-      {/* SIDEBAR ADMIN */}
-      <aside className="w-72 bg-[#0F172A] border-r border-slate-800 flex flex-col justify-between hidden md:flex shadow-2xl z-20">
+      {/* OVERLAY MOBILE (Fermer le menu au clic) */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden transition-opacity"
+          onClick={() => setIsMobileMenuOpen(false)}
+        ></div>
+      )}
+
+      {/* SIDEBAR ADMIN (Responsive) */}
+      <aside className={`fixed inset-y-0 left-0 w-72 bg-[#0F172A] border-r border-slate-800 flex flex-col justify-between shadow-2xl z-50 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div>
-          <div className="h-20 px-8 flex items-center gap-4 border-b border-slate-800 bg-slate-900/50">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-lg shadow-blue-500/30 ring-2 ring-slate-900">
-              JB
+          <div className="h-20 px-6 md:px-8 flex items-center justify-between border-b border-slate-800 bg-slate-900/50">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-lg shadow-blue-500/30 ring-2 ring-slate-900">
+                JB
+              </div>
+              <div>
+                <h2 className="text-sm font-extrabold tracking-tight text-white">JBLESS ADMIN</h2>
+                <span className="text-[10px] text-blue-400 font-bold tracking-widest uppercase">Console SaaS</span>
+              </div>
             </div>
-            <div>
-              <h2 className="text-sm font-extrabold tracking-tight text-white">JBLESS ADMIN</h2>
-              <span className="text-[10px] text-blue-400 font-bold tracking-widest uppercase">Console SaaS</span>
-            </div>
+            {/* Bouton fermer sur mobile */}
+            <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-slate-400 hover:text-white">
+              <IconClose />
+            </button>
           </div>
 
           <nav className="p-5 space-y-2 text-sm font-medium">
             <button
-              onClick={() => setActiveTab("overview")}
+              onClick={() => changeTab("overview")}
               className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 ${activeTab === "overview" ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:bg-slate-800/50 hover:text-white"}`}
             >
               <IconOverview />
               Vue d'ensemble
             </button>
             <button
-              onClick={() => setActiveTab("users")}
+              onClick={() => changeTab("users")}
               className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 ${activeTab === "users" ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:bg-slate-800/50 hover:text-white"}`}
             >
               <IconUsers />
               Répertoire Clients
             </button>
             <button
-              onClick={() => setActiveTab("pricing")}
+              onClick={() => changeTab("pricing")}
               className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 ${activeTab === "pricing" ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:bg-slate-800/50 hover:text-white"}`}
             >
               <IconPricing />
@@ -242,63 +261,66 @@ export default function AdminDashboardPage() {
       </aside>
 
       {/* CONTENU PRINCIPAL */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto relative">
+      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto relative w-full overflow-x-hidden">
         
-        {/* Header supérieur */}
-        <header className="h-20 border-b border-slate-800 px-10 flex items-center justify-between bg-[#0B1120]/80 backdrop-blur-md sticky top-0 z-10">
-          <h1 className="text-lg font-extrabold text-white uppercase tracking-wider flex items-center gap-3">
-            {activeTab === "overview" && <><span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]"></span> Tableau de bord Global</>}
-            {activeTab === "users" && <><span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.8)]"></span> Répertoire des Entreprises</>}
-            {activeTab === "pricing" && <><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span> Gestion de la Grille Tarifaire</>}
-          </h1>
-          <div className="flex items-center gap-3 md:hidden">
-            <button onClick={() => router.push("/")} className="text-xs px-4 py-2 bg-slate-800 rounded-lg">App</button>
-            <button onClick={handleLogout} className="text-xs px-4 py-2 bg-red-600/20 text-red-400 rounded-lg">Déco</button>
+        {/* Header supérieur responsive */}
+        <header className="h-20 border-b border-slate-800 px-4 md:px-10 flex items-center justify-between bg-[#0B1120]/80 backdrop-blur-md sticky top-0 z-10 w-full">
+          <div className="flex items-center gap-3">
+            {/* Bouton Hamburger pour mobile */}
+            <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 text-slate-300 hover:text-white focus:outline-none rounded-lg hover:bg-slate-800 transition-colors">
+              <IconMenu />
+            </button>
+            
+            <h1 className="text-sm md:text-lg font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
+              {activeTab === "overview" && <><span className="hidden md:inline-block w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]"></span> Tableau de bord</>}
+              {activeTab === "users" && <><span className="hidden md:inline-block w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.8)]"></span> Entreprises</>}
+              {activeTab === "pricing" && <><span className="hidden md:inline-block w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span> Tarifs</>}
+            </h1>
           </div>
         </header>
 
-        <div className="p-10 space-y-10 max-w-7xl w-full mx-auto pb-20">
+        <div className="p-4 md:p-10 space-y-6 md:space-y-10 max-w-7xl w-full mx-auto pb-20">
           
           {/* TAB : OVERVIEW AVEC GRAPHIQUES RECHARTS */}
           {activeTab === "overview" && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               
               {/* Cartes de KPI */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 
-                <div className="lg:col-span-2 bg-gradient-to-br from-blue-900 to-[#0F172A] border border-blue-800/50 p-6 rounded-3xl shadow-2xl relative overflow-hidden group">
+                <div className="sm:col-span-2 bg-gradient-to-br from-blue-900 to-[#0F172A] border border-blue-800/50 p-6 rounded-3xl shadow-2xl relative overflow-hidden group">
                   <div className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-500/30 transition-all duration-500"></div>
                   <div className="relative z-10">
                     <p className="text-xs font-bold text-blue-300 uppercase tracking-wider mb-2">Chiffre d'Affaires Généré</p>
-                    <div className="flex items-baseline gap-2">
-                        <h3 className="text-4xl lg:text-5xl font-black text-white">{stats.totalRevenue.toLocaleString()}</h3>
-                        <span className="text-xl font-bold text-blue-400">FCFA</span>
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                        <h3 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white">{stats.totalRevenue.toLocaleString()}</h3>
+                        <span className="text-lg md:text-xl font-bold text-blue-400">FCFA</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-[#0F172A] border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col justify-between group hover:border-emerald-500/30 transition-colors">
+                <div className="bg-[#0F172A] border border-slate-800 p-5 md:p-6 rounded-3xl shadow-xl flex flex-col justify-between group hover:border-emerald-500/30 transition-colors">
                   <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
                         Abonnés Actifs
                         <span className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400"><IconUsers /></span>
                     </p>
-                    <h3 className="text-4xl font-black text-white mt-2">{stats.activeUsers}</h3>
+                    <h3 className="text-3xl md:text-4xl font-black text-white mt-2">{stats.activeUsers}</h3>
                   </div>
-                  <div className="mt-4 text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                  <div className="mt-4 text-[10px] md:text-xs font-semibold text-emerald-400 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Souscriptions valides
                   </div>
                 </div>
 
-                <div className="bg-[#0F172A] border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col justify-between group hover:border-amber-500/30 transition-colors">
+                <div className="bg-[#0F172A] border border-slate-800 p-5 md:p-6 rounded-3xl shadow-xl flex flex-col justify-between group hover:border-amber-500/30 transition-colors">
                   <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
                         En Période d'Essai
                         <span className="p-1.5 bg-amber-500/10 rounded-lg text-amber-400"><IconOverview /></span>
                     </p>
-                    <h3 className="text-4xl font-black text-white mt-2">{stats.trialUsers}</h3>
+                    <h3 className="text-3xl md:text-4xl font-black text-white mt-2">{stats.trialUsers}</h3>
                   </div>
-                  <div className="mt-4 text-xs font-semibold text-amber-400 flex items-center gap-1">
+                  <div className="mt-4 text-[10px] md:text-xs font-semibold text-amber-400 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Conversions potentielles
                   </div>
                 </div>
@@ -307,22 +329,21 @@ export default function AdminDashboardPage() {
               {/* SECTION GRAPHIQUES RECHARTS */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
-                {/* Graphique Donut - Statuts des utilisateurs */}
-                <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-8 shadow-xl flex flex-col">
+                <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-xl flex flex-col">
                   <div className="mb-4">
                     <h3 className="text-sm font-bold text-white uppercase tracking-wider">Répartition par Statut</h3>
                     <p className="text-xs text-slate-400 mt-0.5">Vue globale des comptes actifs, en essai et expirés</p>
                   </div>
                   
-                  <div className="h-72 w-full flex items-center justify-center">
+                  <div className="h-64 md:h-72 w-full flex items-center justify-center">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={statusChartData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={70}
-                          outerRadius={100}
+                          innerRadius={60}
+                          outerRadius={90}
                           paddingAngle={8}
                           dataKey="value"
                         >
@@ -337,26 +358,25 @@ export default function AdminDashboardPage() {
                     </ResponsiveContainer>
                   </div>
 
-                  <div className="flex justify-center gap-6 text-xs font-bold text-slate-300 mt-2">
+                  <div className="flex flex-wrap justify-center gap-4 md:gap-6 text-xs font-bold text-slate-300 mt-2">
                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Actifs ({stats.activeUsers})</div>
                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-amber-500"></span> Essais ({stats.trialUsers})</div>
                     <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-500"></span> Expirés ({stats.expiredUsers})</div>
                   </div>
                 </div>
 
-                {/* Graphique en Barres - Distribution par Formule / Plan */}
-                <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-8 shadow-xl flex flex-col">
+                <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-xl flex flex-col">
                   <div className="mb-4">
                     <h3 className="text-sm font-bold text-white uppercase tracking-wider">Popularité des Formules</h3>
                     <p className="text-xs text-slate-400 mt-0.5">Nombre d'utilisateurs par type d'abonnement</p>
                   </div>
 
-                  <div className="h-72 w-full mt-2">
+                  <div className="h-64 md:h-72 w-full mt-2">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={planChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
-                        <XAxis dataKey="name" stroke="#64748B" fontSize={11} tickLine={false} />
-                        <YAxis stroke="#64748B" fontSize={11} tickLine={false} allowDecimals={false} />
+                        <XAxis dataKey="name" stroke="#64748B" fontSize={10} tickLine={false} />
+                        <YAxis stroke="#64748B" fontSize={10} tickLine={false} allowDecimals={false} />
                         <Tooltip 
                           contentStyle={{ backgroundColor: "#090D16", borderColor: "#1E293B", borderRadius: "12px", color: "#fff", fontSize: "12px", fontWeight: "bold" }} 
                           cursor={{ fill: "rgba(59, 130, 246, 0.05)" }}
@@ -373,25 +393,25 @@ export default function AdminDashboardPage() {
 
           {/* TAB : USERS */}
           {activeTab === "users" && (
-            <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-8">
-                <h3 className="font-extrabold text-base text-white uppercase tracking-wider flex items-center gap-2">
-                    <IconUsers /> Base de données Clients
+            <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-4 md:p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6 md:mb-8">
+                <h3 className="font-extrabold text-sm md:text-base text-white uppercase tracking-wider flex items-center gap-2">
+                    <IconUsers /> Base de données
                 </h3>
-                <div className="relative">
+                <div className="relative w-full sm:w-auto">
                     <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     <input
                     type="text"
                     placeholder="Chercher une entreprise..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 pr-4 py-2.5 text-xs bg-slate-900 border border-slate-700 rounded-xl outline-none text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all w-64 shadow-inner"
+                    className="w-full sm:w-64 pl-10 pr-4 py-2.5 text-xs bg-slate-900 border border-slate-700 rounded-xl outline-none text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner"
                     />
                 </div>
               </div>
               
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
+              <div className="overflow-x-auto rounded-xl">
+                <table className="w-full text-left border-collapse text-sm whitespace-nowrap min-w-[700px]">
                   <thead>
                     <tr className="border-b-2 border-slate-800 text-slate-400 uppercase text-[10px] font-black tracking-widest bg-slate-900/50">
                       <th className="py-4 px-4 rounded-tl-xl">Entreprise & Contact</th>
@@ -405,12 +425,12 @@ export default function AdminDashboardPage() {
                       <tr key={u.uid} className="hover:bg-slate-800/30 transition-colors group">
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 flex items-center justify-center text-white font-bold text-sm border border-slate-600 shadow-sm">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 flex items-center justify-center text-white font-bold text-sm border border-slate-600 shadow-sm shrink-0">
                                 {u.companyName.charAt(0).toUpperCase()}
                             </div>
-                            <div>
-                                <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors">{u.companyName}</div>
-                                <div className="text-slate-400 text-xs mt-0.5">{u.email}</div>
+                            <div className="min-w-0">
+                                <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors truncate">{u.companyName}</div>
+                                <div className="text-slate-400 text-xs mt-0.5 truncate">{u.email}</div>
                             </div>
                           </div>
                         </td>
@@ -453,37 +473,39 @@ export default function AdminDashboardPage() {
 
           {/* TAB : PRICING */}
           {activeTab === "pricing" && (
-            <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-8 max-w-2xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="mb-8">
-                <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
+            <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 max-w-2xl mx-auto shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="mb-6 md:mb-8">
+                <h3 className="font-extrabold text-base md:text-lg text-white uppercase tracking-wider flex items-center gap-2">
                     <IconPricing /> Grille Tarifaire Officielle
                 </h3>
-                <p className="text-slate-400 text-sm mt-2">Mettez à jour les prix qui seront affichés aux clients lors du renouvellement de leur licence logicielle.</p>
+                <p className="text-slate-400 text-xs md:text-sm mt-2">Mettez à jour les prix qui seront affichés aux clients lors du renouvellement de leur licence logicielle.</p>
               </div>
 
               <form onSubmit={handleSavePricing} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     <div className="space-y-2">
                     <label className="block text-xs font-black text-slate-300 uppercase tracking-widest">Tarif 1 Mois (FCFA)</label>
                     <div className="relative">
-                        <input type="number" value={pricing.monthly} onChange={(e) => setPricing({ ...pricing, monthly: e.target.value })} className="w-full p-4 pl-6 pr-16 text-lg bg-slate-900/50 border border-slate-700 rounded-2xl text-white font-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-inner" required />
+                        <input type="number" value={pricing.monthly} onChange={(e) => setPricing({ ...pricing, monthly: e.target.value })} className="w-full p-4 pl-5 pr-16 text-lg bg-slate-900/50 border border-slate-700 rounded-2xl text-white font-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-inner" required />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">XOF</span>
                     </div>
                     </div>
                     <div className="space-y-2">
                     <label className="block text-xs font-black text-slate-300 uppercase tracking-widest">Tarif 6 Mois (FCFA)</label>
                     <div className="relative">
-                        <input type="number" value={pricing.sixMonths} onChange={(e) => setPricing({ ...pricing, sixMonths: e.target.value })} className="w-full p-4 pl-6 pr-16 text-lg bg-slate-900/50 border border-slate-700 rounded-2xl text-white font-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-inner" required />
+                        <input type="number" value={pricing.sixMonths} onChange={(e) => setPricing({ ...pricing, sixMonths: e.target.value })} className="w-full p-4 pl-5 pr-16 text-lg bg-slate-900/50 border border-slate-700 rounded-2xl text-white font-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-inner" required />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">XOF</span>
                     </div>
                     </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-black text-slate-300 uppercase tracking-widest">Tarif 1 An (FCFA) <span className="text-emerald-400 ml-2">Recommandé</span></label>
+                  <label className="block text-xs font-black text-slate-300 uppercase tracking-widest flex items-center flex-wrap gap-2">
+                    Tarif 1 An (FCFA) <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">Recommandé</span>
+                  </label>
                   <div className="relative">
-                    <input type="number" value={pricing.yearly} onChange={(e) => setPricing({ ...pricing, yearly: e.target.value })} className="w-full p-4 pl-6 pr-16 text-2xl bg-slate-900 border-2 border-blue-500/30 rounded-2xl text-white font-black outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all shadow-lg" required />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-500 font-black text-sm">XOF / AN</span>
+                    <input type="number" value={pricing.yearly} onChange={(e) => setPricing({ ...pricing, yearly: e.target.value })} className="w-full p-4 pl-5 pr-20 md:pr-24 text-xl md:text-2xl bg-slate-900 border-2 border-blue-500/30 rounded-2xl text-white font-black outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all shadow-lg" required />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-500 font-black text-[10px] md:text-sm">XOF / AN</span>
                   </div>
                 </div>
 
@@ -492,7 +514,7 @@ export default function AdminDashboardPage() {
                     {isSavingPricing ? (
                         <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Sauvegarde...</>
                     ) : (
-                        <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Enregistrer les nouveaux tarifs</>
+                        <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Enregistrer les tarifs</>
                     )}
                     </button>
                 </div>
