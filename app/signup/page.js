@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../../firebase"; // Vérifie que ce chemin est le bon dans ton projet
+import { auth, db } from "../../firebase"; 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -11,7 +11,9 @@ export default function SignupPage() {
   const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState(""); 
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
@@ -19,14 +21,14 @@ export default function SignupPage() {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+    setMessage("");
     
     try {
-      // 1. Création du compte dans Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 2. Création du profil de l'entreprise dans Firestore (Base de données)
-      // On initialise la période d'essai de 30 jours
+      await sendEmailVerification(user);
+
       const trialEnd = new Date();
       trialEnd.setDate(trialEnd.getDate() + 30);
 
@@ -39,8 +41,12 @@ export default function SignupPage() {
         createdAt: new Date().toISOString()
       });
 
-      // 3. Redirection vers le tableau de bord
-      router.push("/");
+      setMessage("Compte créé ! Un e-mail de vérification vous a été envoyé.");
+      
+      setTimeout(() => {
+        router.push("/");
+      }, 3000);
+
     } catch (err) {
       console.error(err);
       if (err.code === 'auth/email-already-in-use') {
@@ -55,18 +61,15 @@ export default function SignupPage() {
   };
 
   return (
-    /* Parent container : Centré sur mobile avec padding, plein écran étiré sur desktop */
-    <div className="min-h-[100dvh] flex items-center justify-center lg:items-stretch lg:justify-start lg:flex-row w-full bg-gradient-to-br from-blue-600 via-indigo-700 to-indigo-900 font-sans overflow-hidden p-4 sm:p-8 lg:p-0">
+    <div className="min-h-[100dvh] w-full max-w-[100vw] flex items-center justify-center lg:items-stretch lg:justify-start lg:flex-row bg-gradient-to-br from-blue-600 via-indigo-700 to-indigo-900 font-sans overflow-x-hidden overflow-y-auto p-4 sm:p-8 lg:p-0">
       
-      {/* Panneau de Gauche : Carte flottante sur mobile, panneau latéral sur desktop */}
+      {/* Colonne du Formulaire (Gauche) */}
       <div className="w-full max-w-md lg:max-w-none lg:w-1/2 flex items-center justify-center bg-white px-6 py-10 sm:p-10 lg:p-20 xl:p-24 relative z-10 rounded-[2rem] lg:rounded-none lg:rounded-r-[3.5rem] shadow-2xl lg:shadow-[25px_0_50px_-12px_rgba(0,0,0,0.3)] transition-all duration-300 lg:min-h-screen">
         
         <div className="w-full max-w-sm lg:max-w-md space-y-8">
           
-          {/* En-tête du formulaire */}
           <div>
             <div className="flex items-center gap-3 mb-6">
-              {/* Logo Billio */}
               <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-blue-500/30">
                 B
               </div>
@@ -80,7 +83,6 @@ export default function SignupPage() {
             </p>
           </div>
 
-          {/* Affichage des erreurs avec le même design que le login */}
           {error && (
             <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
               <svg className="h-5 w-5 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -90,16 +92,24 @@ export default function SignupPage() {
             </div>
           )}
 
-          {/* Formulaire */}
+          {message && (
+            <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+              <svg className="h-5 w-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm font-medium text-green-700">{message}</p>
+            </div>
+          )}
+
           <form onSubmit={handleSignup} className="space-y-5 mt-8">
             
-            {/* Nom de l'entreprise */}
+            {/* Champ Nom de l'entreprise */}
             <div className="space-y-1.5">
               <label className="block text-sm font-semibold text-gray-700">
                 Nom de l'entreprise
               </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <div className="group flex items-center w-full border border-gray-200 rounded-xl bg-gray-50/50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-transparent transition-all duration-200 ease-in-out">
+                <div className="pl-4 pr-3 flex items-center pointer-events-none">
                   <svg className="h-5 w-5 text-gray-400 group-focus-within:text-blue-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
@@ -111,18 +121,18 @@ export default function SignupPage() {
                   required
                   disabled={isLoading}
                   placeholder="Ma Super PME"
-                  className="block w-full appearance-none pl-12 pr-4 py-4 sm:py-3.5 border border-gray-200 rounded-xl text-gray-900 bg-gray-50/50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white focus:border-transparent transition-all duration-200 ease-in-out disabled:opacity-60 disabled:cursor-not-allowed text-base sm:text-sm"
+                  className="flex-1 w-full py-4 sm:py-3.5 bg-transparent appearance-none focus:outline-none text-gray-900 placeholder-gray-400 text-base sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
 
-            {/* Email */}
+            {/* Champ Email professionnel */}
             <div className="space-y-1.5">
               <label className="block text-sm font-semibold text-gray-700">
                 Email professionnel
               </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <div className="group flex items-center w-full border border-gray-200 rounded-xl bg-gray-50/50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-transparent transition-all duration-200 ease-in-out">
+                <div className="pl-4 pr-3 flex items-center pointer-events-none">
                   <svg className="h-5 w-5 text-gray-400 group-focus-within:text-blue-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                   </svg>
@@ -134,31 +144,47 @@ export default function SignupPage() {
                   required
                   disabled={isLoading}
                   placeholder="nom@entreprise.com"
-                  className="block w-full appearance-none pl-12 pr-4 py-4 sm:py-3.5 border border-gray-200 rounded-xl text-gray-900 bg-gray-50/50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white focus:border-transparent transition-all duration-200 ease-in-out disabled:opacity-60 disabled:cursor-not-allowed text-base sm:text-sm"
+                  className="flex-1 w-full py-4 sm:py-3.5 bg-transparent appearance-none focus:outline-none text-gray-900 placeholder-gray-400 text-base sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
 
-            {/* Mot de passe */}
+            {/* Champ Mot de passe */}
             <div className="space-y-1.5">
               <label className="block text-sm font-semibold text-gray-700">
                 Mot de passe <span className="text-xs text-gray-500 font-normal">(min. 6 car.)</span>
               </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <div className="group flex items-center w-full border border-gray-200 rounded-xl bg-gray-50/50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-600 focus-within:border-transparent transition-all duration-200 ease-in-out">
+                <div className="pl-4 pr-3 flex items-center pointer-events-none">
                   <svg className="h-5 w-5 text-gray-400 group-focus-within:text-blue-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={isLoading}
                   placeholder="••••••••"
-                  className="block w-full appearance-none pl-12 pr-4 py-4 sm:py-3.5 border border-gray-200 rounded-xl text-gray-900 bg-gray-50/50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white focus:border-transparent transition-all duration-200 ease-in-out disabled:opacity-60 disabled:cursor-not-allowed text-base sm:text-sm"
+                  className="flex-1 w-full py-4 sm:py-3.5 bg-transparent appearance-none focus:outline-none text-gray-900 placeholder-gray-400 text-base sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="px-4 flex items-center text-gray-400 hover:text-blue-600 focus:outline-none transition-colors"
+                >
+                  {showPassword ? (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -181,7 +207,6 @@ export default function SignupPage() {
             </button>
           </form>
 
-          {/* Lien vers la connexion */}
           <p className="mt-8 text-center text-sm text-gray-600">
             Vous avez déjà un compte ?{" "}
             <Link href="/login" className="font-semibold text-blue-600 hover:text-blue-700 transition-colors">
@@ -191,17 +216,17 @@ export default function SignupPage() {
         </div>
       </div>
 
-      {/* Panneau de Droite : Décoration (Uniquement sur grand écran) */}
+      {/* Panneau Bleu avec la décoration restaurée (Droite) */}
       <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center flex-1">
         
-        {/* Cercles décoratifs avec flou */}
+        {/* Cercles lumineux en arrière-plan */}
         <div className="absolute top-10 left-10 w-[400px] h-[400px] bg-blue-400 rounded-full mix-blend-screen filter blur-[100px] opacity-40 animate-pulse"></div>
         <div className="absolute bottom-10 right-10 w-[500px] h-[500px] bg-purple-500 rounded-full mix-blend-screen filter blur-[100px] opacity-40"></div>
         
-        {/* Contenu visuel */}
+        {/* Contenu Décoratif (La "plaque" et les textes) */}
         <div className="relative z-10 text-center text-white px-12">
+          {/* Plaque Glassmorphism */}
           <div className="inline-flex p-4 rounded-3xl bg-white/10 backdrop-blur-md border border-white/20 mb-8 shadow-2xl transform transition-transform hover:scale-105 duration-500">
-            {/* Illustration stylisée */}
             <div className="w-72 h-44 bg-white/5 rounded-2xl border border-white/10 p-5 flex flex-col gap-4">
               <div className="w-1/2 h-4 bg-white/20 rounded-full"></div>
               <div className="w-3/4 h-4 bg-white/20 rounded-full"></div>
@@ -210,13 +235,15 @@ export default function SignupPage() {
               </div>
             </div>
           </div>
+          
+          {/* Textes d'accroche */}
           <h3 className="text-4xl font-bold mb-4 tracking-tight">Rejoignez Billio.</h3>
           <p className="text-lg text-blue-100 max-w-md mx-auto leading-relaxed">
             Créez vos premières factures en moins de 2 minutes. La gestion d'entreprise n'a jamais été aussi fluide.
           </p>
         </div>
         
-        {/* Grille de fond subtile */}
+        {/* Effet "Grain" (Texture par-dessus le fond bleu) */}
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
       </div>
       

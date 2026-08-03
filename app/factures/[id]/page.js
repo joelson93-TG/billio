@@ -297,19 +297,18 @@ export default function InvoiceDetailOrEditPage() {
   const invoicePaidOrPartial = isPaidOrPartial(invoice.status);
   const activePrintOption = printOption || invoice.printOption || "1";
 
-  // ✅ LOGO 210px CENTRÉ
   const logoContainerStyle = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    height: "210px",              // ✅ 210px
+    height: "210px",
     width: "100%",
     overflow: "hidden",
     flexShrink: 0,
   };
 
   const logoImgStyle = {
-    height: "210px",              // ✅ 210px
+    height: "210px",
     width: "auto",
     maxWidth: "420px",
     objectFit: "contain",
@@ -374,36 +373,34 @@ export default function InvoiceDetailOrEditPage() {
             max-height: 297mm !important; 
             overflow: hidden !important;
             box-sizing: border-box !important;
-            padding: 6mm 12mm 6mm 12mm !important;  /* ✅ Padding réduit */
+            padding: 6mm 12mm 4mm 12mm !important;
             margin: 0 !important; 
             border-radius: 0 !important;
             border: none !important; 
             box-shadow: none !important;
-            display: flex !important; 
-            flex-direction: column !important;
           }
           
           .invoice-content { 
-            flex: 0 0 auto !important; 
+            position: relative !important;
           }
           
-          .invoice-spacer {
-            flex: 1 1 auto !important;
-            min-height: 2mm !important;      /* ✅ Spacer minimal */
-            max-height: 5mm !important;      /* ✅ Spacer réduit */
+          /* ✅ SIGNATURE - hauteur min 85mm pour footer visible avec plus d'espace */
+          .invoice-signature-wrapper { 
+            min-height: 85mm !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-end !important;
           }
           
           .invoice-signature { 
-            flex: 0 0 auto !important; 
-            margin-top: 2mm !important;      /* ✅ Marge réduite */
+            margin-bottom: 3mm !important;
           }
           
           .invoice-footer { 
-            flex: 0 0 auto !important; 
-            margin-top: 2mm !important;      /* ✅ Marge réduite */
+            margin-top: 0 !important;
+            padding-bottom: 1mm !important;
           }
 
-          /* ✅ Logo 210px centré */
           .logo-print-container {
             height: 210px !important;
             display: flex !important;
@@ -430,7 +427,6 @@ export default function InvoiceDetailOrEditPage() {
 
       <Toast toast={toast} onClose={() => setToast(null)} />
 
-      {/* HEADER */}
       <header className="print-hidden min-h-[5rem] bg-white border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between p-4 md:px-8 sticky top-0 z-10 shadow-sm gap-4">
         <div className="flex flex-wrap items-center gap-2 md:gap-4">
           <Link href="/factures" className="px-3 py-2 md:py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">
@@ -467,7 +463,6 @@ export default function InvoiceDetailOrEditPage() {
         </div>
       </header>
 
-      {/* Bandeau réglée */}
       {!isEditing && invoicePaidOrPartial && (
         <div className="print-hidden max-w-3xl mx-4 md:mx-auto mt-4 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl flex items-center justify-between text-sm shadow-sm">
           <div>
@@ -478,23 +473,20 @@ export default function InvoiceDetailOrEditPage() {
         </div>
       )}
 
-      {/* ===== ZONE IMPRIMABLE ===== */}
       <main
         id="invoice-printable-container"
         className="max-w-3xl mx-4 md:mx-auto mt-6 bg-white rounded-2xl shadow-sm border border-gray-200 px-4 pt-2 pb-4 md:px-6 md:pt-2 md:pb-6 print:m-0 print:rounded-none print:border-none print:shadow-none"
       >
         {!isEditing ? (
           <>
+            {/* CONTENU */}
             <div className="invoice-content relative bg-white">
-
-              {/* Filigrane */}
               {company.logoUrl && (
                 <div style={watermarkStyle}>
                   <img src={company.logoUrl} alt="" crossOrigin="anonymous" style={watermarkImgStyle} />
                 </div>
               )}
 
-              {/* ===== EN-TÊTE OPTION 2 ===== */}
               {activePrintOption === "2" ? (
                 <div style={{
                   display: "flex", flexDirection: "row", justifyContent: "space-between",
@@ -504,85 +496,35 @@ export default function InvoiceDetailOrEditPage() {
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                     {company.logoUrl && (
-                      <img
-                        src={company.logoUrl} alt="Logo" crossOrigin="anonymous"
-                        className="logo-print-img-opt2"
-                        style={logoImgStyleOpt2}
-                        onError={(e) => { e.currentTarget.style.display = "none"; }}
-                      />
+                      <img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-print-img-opt2" style={logoImgStyleOpt2} onError={(e) => { e.currentTarget.style.display = "none"; }} />
                     )}
                     <div>
-                      <p style={{ fontSize: "14px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: 0 }}>
-                        {company.companyName || "SOCIÉTÉ"}
-                      </p>
+                      <p style={{ fontSize: "14px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: 0 }}>{company.companyName || "SOCIÉTÉ"}</p>
                       <p style={{ fontSize: "11px", color: "#4b5563", margin: "2px 0 0 0" }}>{company.address}</p>
-                      <p style={{ fontSize: "11px", color: "#4b5563", margin: "1px 0 0 0" }}>
-                        {company.phone}{company.email ? ` | ${company.email}` : ""}
-                      </p>
+                      <p style={{ fontSize: "11px", color: "#4b5563", margin: "1px 0 0 0" }}>{company.phone}{company.email ? ` | ${company.email}` : ""}</p>
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <p style={{ fontSize: "11px", fontWeight: "600", color: "#111827", margin: 0 }}>
-                      NIF : {company.nif || "---"} | RCCM : {company.rccm || "---"}
-                    </p>
-                    {company.services && (
-                      <p style={{ fontSize: "10px", color: "#6b7280", fontStyle: "italic", marginTop: "3px", maxWidth: "200px" }}>
-                        {company.services}
-                      </p>
-                    )}
+                    <p style={{ fontSize: "11px", fontWeight: "600", color: "#111827", margin: 0 }}>NIF : {company.nif || "---"} | RCCM : {company.rccm || "---"}</p>
+                    {company.services && <p style={{ fontSize: "10px", color: "#6b7280", fontStyle: "italic", marginTop: "3px", maxWidth: "200px" }}>{company.services}</p>}
                   </div>
                 </div>
-
               ) : (
-                /* ===== EN-TÊTE OPTION 1 — Logo 210px centré ===== */
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "14px",
-                  borderBottom: "1px solid #1f2937",
-                  paddingBottom: "8px",
-                  position: "relative",
-                  zIndex: 10,
-                  alignItems: "center",
-                }}>
-                  {/* ✅ Logo 210px centré */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", borderBottom: "1px solid #1f2937", paddingBottom: "8px", position: "relative", zIndex: 10, alignItems: "center" }}>
                   <div className="logo-print-container" style={logoContainerStyle}>
                     {company.logoUrl ? (
-                      <img
-                        src={company.logoUrl}
-                        alt="Logo"
-                        crossOrigin="anonymous"
-                        className="logo-print-img"
-                        style={logoImgStyle}
-                        onError={(e) => { e.currentTarget.style.display = "none"; }}
-                      />
+                      <img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-print-img" style={logoImgStyle} onError={(e) => { e.currentTarget.style.display = "none"; }} />
                     ) : (
-                      <span style={{ fontSize: "22px", fontWeight: "900", color: "#1f2937", letterSpacing: "0.05em" }}>
-                        {company.companyName || "LOGO"}
-                      </span>
+                      <span style={{ fontSize: "22px", fontWeight: "900", color: "#1f2937", letterSpacing: "0.05em" }}>{company.companyName || "LOGO"}</span>
                     )}
                   </div>
-
-                  {/* Services */}
-                  <div style={{
-                    borderLeft: `4px solid ${brandColor}`,
-                    paddingLeft: "12px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "center",
-                    alignSelf: "center",
-                  }}>
-                    <p style={{ fontWeight: "700", textTransform: "uppercase", fontSize: "11px", color: brandColor, margin: "0 0 4px 0" }}>
-                      Nos Services
-                    </p>
-                    <p style={{ fontSize: "11px", color: "#4b5563", whiteSpace: "pre-line", lineHeight: "1.5", margin: 0 }}>
-                      {company.services}
-                    </p>
+                  <div style={{ borderLeft: `4px solid ${brandColor}`, paddingLeft: "12px", display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "center" }}>
+                    <p style={{ fontWeight: "700", textTransform: "uppercase", fontSize: "11px", color: brandColor, margin: "0 0 4px 0" }}>Nos Services</p>
+                    <p style={{ fontSize: "11px", color: "#4b5563", whiteSpace: "pre-line", lineHeight: "1.5", margin: 0 }}>{company.services}</p>
                   </div>
                 </div>
               )}
 
-              {/* N° + date */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-1.5 print:mt-1 relative z-10 gap-2">
                 <div className="text-white px-3 py-1.5 print:py-1 rounded font-bold text-xs shadow-sm w-full sm:w-auto text-center sm:text-left" style={{ backgroundColor: brandColor }}>
                   {isProforma ? "PROFORMA" : "FACTURE"} N° {invoice.number} / {company.companyName || "Société"} / {new Date(invoice.date).getFullYear() || new Date().getFullYear()}
@@ -592,7 +534,6 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               </div>
 
-              {/* Client */}
               <div className="flex justify-end relative z-10 mt-1.5 print:mt-1">
                 <div className="w-[300px] max-w-full border border-gray-300 bg-gray-100 p-2 text-[11px] print:text-[10px] space-y-0.5 rounded-lg shadow-sm">
                   <p className="font-bold text-gray-900">DOIT : {invoice.clientName}</p>
@@ -602,7 +543,6 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               </div>
 
-              {/* Tableau */}
               <div className="relative z-10 mt-2 print:mt-1.5 overflow-x-auto print:overflow-visible">
                 <table className="w-full text-left text-[10px] print:text-[9px] border-collapse border border-gray-400 bg-white">
                   <thead>
@@ -619,9 +559,7 @@ export default function InvoiceDetailOrEditPage() {
                         <td className="p-1.5 print:p-1 border border-gray-300 break-words">{item.description}</td>
                         <td className="p-1.5 print:p-1 border border-gray-300 text-center">{item.quantity}</td>
                         <td className="p-1.5 print:p-1 border border-gray-300 text-right whitespace-nowrap">{Number(item.unitPrice).toLocaleString("fr-FR")}</td>
-                        <td className="p-1.5 print:p-1 border border-gray-300 text-right font-medium whitespace-nowrap">
-                          {(Number(item.quantity) * Number(item.unitPrice)).toLocaleString("fr-FR")}
-                        </td>
+                        <td className="p-1.5 print:p-1 border border-gray-300 text-right font-medium whitespace-nowrap">{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString("fr-FR")}</td>
                       </tr>
                     ))}
                     <tr className="border border-gray-400 font-bold bg-gray-50">
@@ -670,54 +608,50 @@ export default function InvoiceDetailOrEditPage() {
                 </table>
               </div>
 
-              {/* Arrêté */}
               <div className="text-[10px] print:text-[9px] italic font-medium relative z-10 pt-1">
                 Arrêté à la somme de : <br className="block md:hidden" />
                 <span className="font-bold underline">{numberToWords(montantArrete)}</span>
               </div>
             </div>
 
-            {/* ✅ SPACER réduit */}
-            <div className="invoice-spacer" style={{ minHeight: "4px", maxHeight: "8px" }}></div>
-
-            {/* ✅ SIGNATURE compacte */}
-            <div className="invoice-signature">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2">
-                <div className="text-[9px] text-gray-500">
-                  {invoicePaidOrPartial && normalizeStatus(invoice.status) === STATUS.PAID && (
-                    <p className="border border-green-500 text-green-700 px-2 py-1 rounded inline-block font-bold text-[9px]">
-                      ✓ Réglé par {invoice.paymentMethod || "Espèces"} le{" "}
-                      {invoice.paymentDate ? new Date(invoice.paymentDate).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR")}
-                    </p>
-                  )}
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-[10px] print:text-[9px] underline mb-1">LE RESPONSABLE</p>
-                  <div className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[8px] text-gray-400 italic" style={{ width: "150px", height: "55px" }}>
-                    Cachet &amp; Signature
+            {/* ✅ WRAPPER SIGNATURE + FOOTER avec min-height 85mm */}
+            <div className="invoice-signature-wrapper">
+              {/* SIGNATURE */}
+              <div className="invoice-signature mt-4 print:mt-0">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 print:gap-4">
+                  <div className="text-[9px] print:text-[8px] text-gray-500">
+                    {invoicePaidOrPartial && normalizeStatus(invoice.status) === STATUS.PAID && (
+                      <p className="border border-green-500 text-green-700 px-2 py-1 rounded inline-block font-bold text-[9px] print:text-[8px]">
+                        ✓ Réglé par {invoice.paymentMethod || "Espèces"} le{" "}
+                        {invoice.paymentDate ? new Date(invoice.paymentDate).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR")}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-[11px] print:text-[10px] underline mb-2">LE RESPONSABLE</p>
+                    <div className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[9px] print:text-[8px] text-gray-400 italic" style={{ width: "160px", height: "70px" }}>
+                      Cachet &amp; Signature
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* ✅ FOOTER compact */}
-            <div className="invoice-footer mt-2 print:mt-1.5">
-              <div className="w-full border-t-2 pt-1 text-[9px] print:text-[8px] text-center text-gray-600 bg-white" style={{ borderColor: brandColor }}>
-                <p className="font-bold text-gray-900 text-[10px] print:text-[9px] mb-0.5">{company.companyName}</p>
-                <div className="flex justify-center gap-x-2 gap-y-0 flex-wrap font-medium">
-                  {company.address && <span>📍 {company.address}</span>}
-                  {company.phone && <span>📞 {company.phone}</span>}
-                  {company.email && <span>✉️ {company.email}</span>}
-                  {company.website && <span>🌐 {company.website}</span>}
+              {/* FOOTER */}
+              <div className="invoice-footer mt-4 print:mt-0">
+                <div className="w-full border-t-2 pt-1.5 print:pt-1 text-[9px] print:text-[8px] text-center text-gray-600 bg-white" style={{ borderColor: brandColor }}>
+                  <p className="font-bold text-gray-900 text-[10px] print:text-[9px] mb-0.5">{company.companyName}</p>
+                  <div className="flex justify-center gap-x-2 gap-y-0 flex-wrap font-medium">
+                    {company.address && <span>📍 {company.address}</span>}
+                    {company.phone && <span>📞 {company.phone}</span>}
+                    {company.email && <span>✉️ {company.email}</span>}
+                    {company.website && <span>🌐 {company.website}</span>}
+                  </div>
+                  <p className="tracking-tight mt-0.5">NIF : {company.nif || "---"} | RCCM : {company.rccm || "---"} | N° CNSS : {company.cnss || "---"}</p>
                 </div>
-                <p className="tracking-tight mt-0.5">
-                  NIF : {company.nif || "---"} | RCCM : {company.rccm || "---"} | N° CNSS : {company.cnss || "---"}
-                </p>
               </div>
             </div>
           </>
         ) : (
-          /* ===== FORMULAIRE (inchangé) ===== */
           <form onSubmit={handleUpdate} className="space-y-6 pt-4">
             <h2 className="text-lg md:text-xl font-bold border-b pb-4">Modifier le document</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
