@@ -412,6 +412,7 @@ export default function InvoiceDetailOrEditPage() {
 
       <Toast toast={toast} onClose={() => setToast(null)} />
 
+      {/* HEADER */}
       <header className="print-hidden min-h-[5rem] bg-white border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between p-4 md:px-8 sticky top-0 z-10 shadow-sm gap-4">
         <div className="flex flex-wrap items-center gap-2 md:gap-4">
           <Link href="/factures" className="px-3 py-2 md:py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">
@@ -448,6 +449,7 @@ export default function InvoiceDetailOrEditPage() {
         </div>
       </header>
 
+      {/* Bandeau réglée */}
       {!isEditing && invoicePaidOrPartial && (
         <div className="print-hidden max-w-3xl mx-4 md:mx-auto mt-4 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl flex items-center justify-between text-sm shadow-sm">
           <div>
@@ -458,6 +460,7 @@ export default function InvoiceDetailOrEditPage() {
         </div>
       )}
 
+      {/* ===== ZONE IMPRIMABLE ===== */}
       <main
         id="invoice-printable-container"
         className="
@@ -468,17 +471,21 @@ export default function InvoiceDetailOrEditPage() {
       >
         {!isEditing ? (
           <>
+            {/* ===== 1. CONTENU PRINCIPAL ===== */}
             <div className="invoice-content relative bg-white">
+
+              {/* Filigrane */}
               {company.logoUrl && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10 select-none z-0">
-                  <img src={company.logoUrl} alt="Filigrane" className="w-full md:w-2/3 max-w-md object-contain grayscale" />
+                  <img src={company.logoUrl} crossOrigin="anonymous" alt="Filigrane" className="w-full md:w-2/3 max-w-md object-contain grayscale" />
                 </div>
               )}
 
+              {/* En-tête */}
               {activePrintOption === "2" ? (
                 <div className="flex flex-col sm:flex-row justify-between items-start border-b-2 pb-3 mb-3 relative z-10 gap-4" style={{ borderColor: brandColor }}>
                   <div className="flex items-center gap-3">
-                    {company.logoUrl && <img src={company.logoUrl} alt="Logo" className="h-16 max-w-[120px] object-contain" />}
+                    {company.logoUrl && <img src={company.logoUrl} crossOrigin="anonymous" alt="Logo" className="h-16 max-w-[120px] object-contain" />}
                     <div>
                       <h2 className="text-base font-black text-gray-900 uppercase">{company.companyName || "SOCIÉTÉ"}</h2>
                       <p className="text-[11px] text-gray-600">{company.address}</p>
@@ -494,7 +501,7 @@ export default function InvoiceDetailOrEditPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-4 print:gap-2 border-b border-gray-800 relative z-10 items-stretch pb-2">
                   <div className="flex items-center justify-start h-20 print:h-14 w-full">
                     {company.logoUrl ? (
-                      <img src={company.logoUrl} alt="Logo" className="w-auto h-auto max-h-20 max-w-full print:max-h-14 object-contain" />
+                      <img src={company.logoUrl} crossOrigin="anonymous" alt="Logo" className="w-auto h-auto max-h-20 max-w-full print:max-h-14 object-contain" />
                     ) : (
                       <span className="text-xl font-black tracking-wider text-gray-800">{company.companyName || "LOGO"}</span>
                     )}
@@ -506,6 +513,7 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               )}
 
+              {/* N° + date */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-2 print:mt-1.5 relative z-10 gap-2">
                 <div className="text-white px-3 py-1.5 print:py-1 rounded font-bold text-xs shadow-sm w-full sm:w-auto text-center sm:text-left" style={{ backgroundColor: brandColor }}>
                   {isProforma ? "PROFORMA" : "FACTURE"} N° {invoice.number} / {company.companyName || "Société"} / {new Date(invoice.date).getFullYear() || new Date().getFullYear()}
@@ -515,6 +523,7 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               </div>
 
+              {/* Client */}
               <div className="flex justify-end relative z-10 mt-2 print:mt-1.5">
                 <div className="w-[300px] max-w-full border border-gray-300 bg-gray-100 p-2 text-[12px] print:text-[11px] space-y-0.5 rounded-lg shadow-sm">
                   <p className="font-bold text-gray-900">DOIT : {invoice.clientName}</p>
@@ -524,6 +533,7 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               </div>
 
+              {/* Tableau */}
               <div className="relative z-10 mt-3 print:mt-2 overflow-x-auto print:overflow-visible">
                 <table className="w-full text-left text-[11px] print:text-[10px] border-collapse border border-gray-400 bg-white">
                   <thead>
@@ -591,14 +601,18 @@ export default function InvoiceDetailOrEditPage() {
                 </table>
               </div>
 
+              {/* Arrêté */}
               <div className="text-[11px] print:text-[10px] italic font-medium relative z-10 pt-1.5">
                 Arrêté à la somme de : <br className="block md:hidden" />
                 <span className="font-bold underline">{numberToWords(montantArrete)}</span>
               </div>
             </div>
+            {/* ===== FIN CONTENU PRINCIPAL ===== */}
 
+            {/* ===== 2. SPACER réduit ===== */}
             <div className="invoice-spacer" style={{ minHeight: "8px", maxHeight: "20px" }}></div>
 
+            {/* ===== 3. SIGNATURE ===== */}
             <div className="invoice-signature">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
                 <div className="text-[10px] text-gray-500">
@@ -622,7 +636,9 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               </div>
             </div>
+            {/* ===== FIN SIGNATURE ===== */}
 
+            {/* ===== 4. FOOTER ===== */}
             <div className="invoice-footer mt-3 print:mt-0">
               <div
                 className="w-full border-t-2 pt-1.5 text-[10px] print:text-[9px] text-center text-gray-600 bg-white"
@@ -640,8 +656,10 @@ export default function InvoiceDetailOrEditPage() {
                 </p>
               </div>
             </div>
+            {/* ===== FIN FOOTER ===== */}
           </>
         ) : (
+          /* ===== FORMULAIRE D'ÉDITION ===== */
           <form onSubmit={handleUpdate} className="space-y-6 pt-4">
             <h2 className="text-lg md:text-xl font-bold border-b pb-4">Modifier le document</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
