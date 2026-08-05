@@ -20,6 +20,8 @@ const IconPricing = () => <svg className="w-5 h-5" fill="none" stroke="currentCo
 const IconHelp = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 const IconChat = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>;
 const IconSend = () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>;
+const IconMenu = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>;
+const IconClose = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
 
 // Formate un timestamp Firestore en heure lisible
 const formatChatTime = (timestamp) => {
@@ -36,6 +38,9 @@ export default function AdminDashboardPage() {
   const [isSavingHelp, setIsSavingHelp] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+
+  // NOUVEAU : état d'ouverture du menu mobile (drawer)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [stats, setStats] = useState({
     totalUsers: 0, activeUsers: 0, trialUsers: 0, expiredUsers: 0, totalRevenue: 0,
@@ -299,6 +304,12 @@ export default function AdminDashboardPage() {
     router.push("/login");
   };
 
+  // NOUVEAU : sélection d'un onglet depuis le menu mobile (ferme le drawer automatiquement)
+  const handleSelectTab = (tab) => {
+    setActiveTab(tab);
+    setIsMobileMenuOpen(false);
+  };
+
   const filteredUsers = usersList.filter((user) => {
     const matchesStatus = filterStatus === "all" || user.status === filterStatus;
     const matchesSearch = user.companyName.toLowerCase().includes(searchTerm.toLowerCase()) || user.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -338,11 +349,20 @@ export default function AdminDashboardPage() {
     );
   }
 
+  // Configuration des onglets de navigation (utilisée pour desktop ET mobile)
+  const navItems = [
+    { key: "overview", label: "Vue d'ensemble", icon: <IconOverview /> },
+    { key: "users", label: "Répertoire Clients", icon: <IconUsers /> },
+    { key: "pricing", label: "Grille Tarifaire", icon: <IconPricing /> },
+    { key: "help", label: "Centre d'aide", icon: <IconHelp /> },
+    { key: "messages", label: "Messagerie", icon: <IconChat />, badge: totalUnreadMessages },
+  ];
+
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-100 flex font-sans selection:bg-blue-500/30">
       
-      {/* SIDEBAR ADMIN */}
-      <aside className="w-72 bg-[#0F172A] border-r border-slate-800 flex flex-col justify-between hidden md:flex shadow-2xl z-20">
+      {/* SIDEBAR ADMIN (DESKTOP) */}
+      <aside className="w-72 bg-[#0F172A] border-r border-slate-800 flex-col justify-between hidden md:flex shadow-2xl z-20">
         <div>
           <div className="h-20 px-8 flex items-center gap-4 border-b border-slate-800 bg-slate-900/50">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-lg shadow-blue-500/30 ring-2 ring-slate-900">
@@ -355,46 +375,21 @@ export default function AdminDashboardPage() {
           </div>
 
           <nav className="p-5 space-y-2 text-sm font-medium">
-            <button
-              onClick={() => setActiveTab("overview")}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 ${activeTab === "overview" ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:bg-slate-800/50 hover:text-white"}`}
-            >
-              <IconOverview />
-              Vue d'ensemble
-            </button>
-            <button
-              onClick={() => setActiveTab("users")}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 ${activeTab === "users" ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:bg-slate-800/50 hover:text-white"}`}
-            >
-              <IconUsers />
-              Répertoire Clients
-            </button>
-            <button
-              onClick={() => setActiveTab("pricing")}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 ${activeTab === "pricing" ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:bg-slate-800/50 hover:text-white"}`}
-            >
-              <IconPricing />
-              Grille Tarifaire
-            </button>
-            <button
-              onClick={() => setActiveTab("help")}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 ${activeTab === "help" ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:bg-slate-800/50 hover:text-white"}`}
-            >
-              <IconHelp />
-              Centre d'aide
-            </button>
-            <button
-              onClick={() => setActiveTab("messages")}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 ${activeTab === "messages" ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:bg-slate-800/50 hover:text-white"}`}
-            >
-              <IconChat />
-              Messagerie
-              {totalUnreadMessages > 0 && (
-                <span className="ml-auto bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">
-                  {totalUnreadMessages}
-                </span>
-              )}
-            </button>
+            {navItems.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setActiveTab(item.key)}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 ${activeTab === item.key ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:bg-slate-800/50 hover:text-white"}`}
+              >
+                {item.icon}
+                {item.label}
+                {item.badge > 0 && (
+                  <span className="ml-auto bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            ))}
           </nav>
         </div>
 
@@ -414,24 +409,102 @@ export default function AdminDashboardPage() {
         </div>
       </aside>
 
+      {/* OVERLAY + DRAWER MOBILE (NOUVEAU) */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          {/* Fond sombre cliquable pour fermer */}
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" 
+            onClick={() => setIsMobileMenuOpen(false)}
+          ></div>
+
+          {/* Panneau coulissant */}
+          <div className="absolute left-0 top-0 h-full w-[80%] max-w-xs bg-[#0F172A] border-r border-slate-800 shadow-2xl flex flex-col justify-between animate-in slide-in-from-left duration-300">
+            <div>
+              <div className="h-20 px-6 flex items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-lg shadow-blue-500/30 ring-2 ring-slate-900">
+                    JB
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-extrabold tracking-tight text-white">JBLESS ADMIN</h2>
+                    <span className="text-[10px] text-blue-400 font-bold tracking-widest uppercase">Console SaaS</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsMobileMenuOpen(false)} 
+                  className="p-2 text-slate-400 hover:text-white bg-slate-800/50 rounded-lg transition-colors"
+                >
+                  <IconClose />
+                </button>
+              </div>
+
+              <nav className="p-5 space-y-2 text-sm font-medium">
+                {navItems.map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => handleSelectTab(item.key)}
+                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 ${activeTab === item.key ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:bg-slate-800/50 hover:text-white"}`}
+                  >
+                    {item.icon}
+                    {item.label}
+                    {item.badge > 0 && (
+                      <span className="ml-auto bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            <div className="p-6 border-t border-slate-800 space-y-4 bg-slate-900/30">
+              <div className="px-4 py-3 bg-slate-950/50 rounded-xl border border-slate-800 shadow-inner">
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Session Active</p>
+                <p className="text-xs font-bold text-slate-200 truncate mt-1">admin@jblessconsulting.com</p>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => router.push("/")} className="flex-1 py-2.5 text-center text-xs font-bold bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors text-slate-300 border border-slate-700 hover:border-slate-600">
+                  App Client
+                </button>
+                <button onClick={handleLogout} className="py-2.5 px-4 text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-colors border border-red-500/10">
+                  Sortir
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CONTENU PRINCIPAL */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto relative">
+      <main className="flex-1 flex flex-col min-h-screen overflow-y-auto relative w-full min-w-0">
         
-        <header className="h-20 border-b border-slate-800 px-10 flex items-center justify-between bg-[#0B1120]/80 backdrop-blur-md sticky top-0 z-10">
-          <h1 className="text-lg font-extrabold text-white uppercase tracking-wider flex items-center gap-3">
-            {activeTab === "overview" && <><span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]"></span> Tableau de bord Global</>}
-            {activeTab === "users" && <><span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.8)]"></span> Répertoire des Entreprises</>}
-            {activeTab === "pricing" && <><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span> Gestion de la Grille Tarifaire</>}
-            {activeTab === "help" && <><span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.8)]"></span> Gestion du Centre d'aide</>}
-            {activeTab === "messages" && <><span className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.8)]"></span> Messagerie Support</>}
-          </h1>
-          <div className="flex items-center gap-3 md:hidden">
-            <button onClick={() => router.push("/")} className="text-xs px-4 py-2 bg-slate-800 rounded-lg">App</button>
-            <button onClick={handleLogout} className="text-xs px-4 py-2 bg-red-600/20 text-red-400 rounded-lg">Déco</button>
+        <header className="h-20 border-b border-slate-800 px-4 md:px-10 flex items-center justify-between bg-[#0B1120]/80 backdrop-blur-md sticky top-0 z-10 gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Bouton hamburger (mobile uniquement) */}
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)} 
+              className="md:hidden p-2 -ml-2 text-slate-300 hover:text-white bg-slate-800/50 rounded-lg transition-colors relative shrink-0"
+            >
+              <IconMenu />
+              {totalUnreadMessages > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                  {totalUnreadMessages}
+                </span>
+              )}
+            </button>
+
+            <h1 className="text-sm md:text-lg font-extrabold text-white uppercase tracking-wider flex items-center gap-2 md:gap-3 truncate">
+              {activeTab === "overview" && <><span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)] shrink-0"></span> <span className="truncate">Tableau de bord</span></>}
+              {activeTab === "users" && <><span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.8)] shrink-0"></span> <span className="truncate">Répertoire Clients</span></>}
+              {activeTab === "pricing" && <><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] shrink-0"></span> <span className="truncate">Grille Tarifaire</span></>}
+              {activeTab === "help" && <><span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.8)] shrink-0"></span> <span className="truncate">Centre d'aide</span></>}
+              {activeTab === "messages" && <><span className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.8)] shrink-0"></span> <span className="truncate">Messagerie</span></>}
+            </h1>
           </div>
         </header>
 
-        <div className="p-10 space-y-10 max-w-7xl w-full mx-auto pb-20">
+        <div className="p-4 md:p-10 space-y-8 md:space-y-10 max-w-7xl w-full mx-auto pb-20">
           
           {/* TAB : OVERVIEW */}
           {activeTab === "overview" && (
@@ -439,19 +512,19 @@ export default function AdminDashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="lg:col-span-2 bg-gradient-to-br from-blue-900 to-[#0F172A] border border-blue-800/50 p-6 rounded-3xl shadow-2xl relative overflow-hidden group">
                   <div className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-500/30 transition-all duration-500"></div>
-                  <div className="relative z-10">
+                  <div className="relative z-10 min-w-0">
                     <p className="text-xs font-bold text-blue-300 uppercase tracking-wider mb-2">Chiffre d'Affaires Généré</p>
-                    <div className="flex items-baseline gap-2">
-                        <h3 className="text-4xl lg:text-5xl font-black text-white">{stats.totalRevenue.toLocaleString()}</h3>
-                        <span className="text-xl font-bold text-blue-400">FCFA</span>
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                        <h3 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white whitespace-nowrap overflow-hidden text-ellipsis">{stats.totalRevenue.toLocaleString()}</h3>
+                        <span className="text-lg sm:text-xl font-bold text-blue-400 shrink-0">FCFA</span>
                     </div>
                   </div>
                 </div>
                 <div className="bg-[#0F172A] border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col justify-between group hover:border-emerald-500/30 transition-colors">
                   <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-                        Abonnés Actifs
-                        <span className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400"><IconUsers /></span>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between gap-2">
+                        <span className="truncate">Abonnés Actifs</span>
+                        <span className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400 shrink-0"><IconUsers /></span>
                     </p>
                     <h3 className="text-4xl font-black text-white mt-2">{stats.activeUsers}</h3>
                   </div>
@@ -461,9 +534,9 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="bg-[#0F172A] border border-slate-800 p-6 rounded-3xl shadow-xl flex flex-col justify-between group hover:border-amber-500/30 transition-colors">
                   <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-                        En Période d'Essai
-                        <span className="p-1.5 bg-amber-500/10 rounded-lg text-amber-400"><IconOverview /></span>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between gap-2">
+                        <span className="truncate">En Période d'Essai</span>
+                        <span className="p-1.5 bg-amber-500/10 rounded-lg text-amber-400 shrink-0"><IconOverview /></span>
                     </p>
                     <h3 className="text-4xl font-black text-white mt-2">{stats.trialUsers}</h3>
                   </div>
@@ -474,7 +547,7 @@ export default function AdminDashboardPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-8 shadow-xl flex flex-col">
+                <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl flex flex-col">
                   <div className="mb-4">
                     <h3 className="text-sm font-bold text-white uppercase tracking-wider">Répartition par Statut</h3>
                     <p className="text-xs text-slate-400 mt-0.5">Vue globale des comptes actifs, en essai et expirés</p>
@@ -491,14 +564,14 @@ export default function AdminDashboardPage() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="flex justify-center gap-6 text-xs font-bold text-slate-300 mt-2">
-                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Actifs ({stats.activeUsers})</div>
-                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-amber-500"></span> Essais ({stats.trialUsers})</div>
-                    <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-500"></span> Expirés ({stats.expiredUsers})</div>
+                  <div className="flex flex-wrap justify-center gap-4 md:gap-6 text-xs font-bold text-slate-300 mt-2">
+                    <div className="flex items-center gap-2 whitespace-nowrap"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Actifs ({stats.activeUsers})</div>
+                    <div className="flex items-center gap-2 whitespace-nowrap"><span className="w-3 h-3 rounded-full bg-amber-500"></span> Essais ({stats.trialUsers})</div>
+                    <div className="flex items-center gap-2 whitespace-nowrap"><span className="w-3 h-3 rounded-full bg-red-500"></span> Expirés ({stats.expiredUsers})</div>
                   </div>
                 </div>
 
-                <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-8 shadow-xl flex flex-col">
+                <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl flex flex-col">
                   <div className="mb-4">
                     <h3 className="text-sm font-bold text-white uppercase tracking-wider">Popularité des Formules</h3>
                     <p className="text-xs text-slate-400 mt-0.5">Nombre d'utilisateurs par type d'abonnement</p>
@@ -521,7 +594,7 @@ export default function AdminDashboardPage() {
 
           {/* TAB : USERS */}
           {activeTab === "users" && (
-            <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-4 md:p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-8">
                 <h3 className="font-extrabold text-base text-white uppercase tracking-wider flex items-center gap-2">
                     <IconUsers /> Base de données Clients
@@ -533,19 +606,19 @@ export default function AdminDashboardPage() {
                     placeholder="Chercher une entreprise..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 pr-4 py-2.5 text-xs bg-slate-900 border border-slate-700 rounded-xl outline-none text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all w-64 shadow-inner"
+                    className="pl-10 pr-4 py-2.5 text-xs bg-slate-900 border border-slate-700 rounded-xl outline-none text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all w-full sm:w-64 shadow-inner"
                     />
                 </div>
               </div>
               
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
+                <table className="w-full min-w-[700px] text-left border-collapse text-sm">
                   <thead>
                     <tr className="border-b-2 border-slate-800 text-slate-400 uppercase text-[10px] font-black tracking-widest bg-slate-900/50">
-                      <th className="py-4 px-4 rounded-tl-xl">Entreprise & Contact</th>
-                      <th className="py-4 px-4">Plan Actuel</th>
-                      <th className="py-4 px-4">Statut</th>
-                      <th className="py-4 px-4 text-right rounded-tr-xl">Action</th>
+                      <th className="py-4 px-4 rounded-tl-xl whitespace-nowrap">Entreprise & Contact</th>
+                      <th className="py-4 px-4 whitespace-nowrap">Plan Actuel</th>
+                      <th className="py-4 px-4 whitespace-nowrap">Statut</th>
+                      <th className="py-4 px-4 text-right rounded-tr-xl whitespace-nowrap">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
@@ -553,19 +626,19 @@ export default function AdminDashboardPage() {
                       <tr key={u.uid} className="hover:bg-slate-800/30 transition-colors group">
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 flex items-center justify-center text-white font-bold text-sm border border-slate-600 shadow-sm">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 flex items-center justify-center text-white font-bold text-sm border border-slate-600 shadow-sm shrink-0">
                                 {u.companyName.charAt(0).toUpperCase()}
                             </div>
-                            <div>
-                                <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors">{u.companyName}</div>
-                                <div className="text-slate-400 text-xs mt-0.5">{u.email}</div>
+                            <div className="min-w-0">
+                                <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors whitespace-nowrap">{u.companyName}</div>
+                                <div className="text-slate-400 text-xs mt-0.5 whitespace-nowrap">{u.email}</div>
                             </div>
                           </div>
                         </td>
-                        <td className="py-4 px-4 font-semibold text-slate-300 text-xs capitalize">
+                        <td className="py-4 px-4 font-semibold text-slate-300 text-xs capitalize whitespace-nowrap">
                             {u.plan === "1year" ? "Annuel" : u.plan === "6months" ? "Semestriel" : u.plan === "1month" ? "Mensuel" : "Essai (Gratuit)"}
                         </td>
-                        <td className="py-4 px-4">
+                        <td className="py-4 px-4 whitespace-nowrap">
                           <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center w-max gap-1.5
                             ${u.status === "active" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : 
                               u.status === "trial" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : 
@@ -574,7 +647,7 @@ export default function AdminDashboardPage() {
                             {u.status === "active" ? "Actif" : u.status === "trial" ? "En Essai" : "Expiré"}
                           </span>
                         </td>
-                        <td className="py-4 px-4 text-right">
+                        <td className="py-4 px-4 text-right whitespace-nowrap">
                           {u.phone ? (
                             <a href={`https://wa.me/${u.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] font-bold text-xs rounded-xl transition-all border border-[#25D366]/20 hover:scale-105">
                               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
@@ -601,7 +674,7 @@ export default function AdminDashboardPage() {
 
           {/* TAB : PRICING */}
           {activeTab === "pricing" && (
-            <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-8 max-w-2xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 max-w-2xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="mb-8">
                 <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
                     <IconPricing /> Grille Tarifaire Officielle
@@ -648,7 +721,7 @@ export default function AdminDashboardPage() {
           {/* TAB : CENTRE D'AIDE */}
           {activeTab === "help" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-8 shadow-2xl">
+              <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
                 <div className="mb-6">
                   <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
                     <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
@@ -699,7 +772,7 @@ export default function AdminDashboardPage() {
                 </form>
               </div>
 
-              <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-8 shadow-2xl">
+              <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
                 <div className="mb-6">
                   <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
                     <svg className="w-6 h-6 text-red-500" fill="currentColor" viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/></svg>
@@ -707,7 +780,7 @@ export default function AdminDashboardPage() {
                   </h3>
                   <p className="text-slate-400 text-sm mt-2">Ajoutez des vidéos YouTube en utilisant le format d'intégration (embed).</p>
                 </div>
-                <form onSubmit={handleAddTutorial} className="space-y-4 mb-8 p-6 bg-slate-900/30 rounded-2xl border border-slate-700">
+                <form onSubmit={handleAddTutorial} className="space-y-4 mb-8 p-4 md:p-6 bg-slate-900/30 rounded-2xl border border-slate-700">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">Titre du tutoriel</label>
@@ -769,13 +842,13 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          {/* TAB : MESSAGERIE (NOUVEAU) */}
+          {/* TAB : MESSAGERIE */}
           {activeTab === "messages" && (
             <div className="bg-[#0F172A] border border-slate-800 rounded-3xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
               <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] h-[calc(100vh-220px)] min-h-[500px]">
                 
                 {/* Liste des conversations */}
-                <div className="border-r border-slate-800 flex flex-col bg-slate-950/30">
+                <div className={`border-r border-slate-800 flex-col bg-slate-950/30 ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
                   <div className="p-5 border-b border-slate-800">
                     <h3 className="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2">
                       <IconChat /> Conversations ({conversations.length})
@@ -823,23 +896,30 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Fenêtre de conversation */}
-                <div className="flex flex-col bg-slate-900/20">
+                <div className={`flex-col bg-slate-900/20 ${selectedChatId ? 'flex' : 'hidden md:flex'}`}>
                   {selectedChatId ? (
                     <>
-                      <div className="p-5 border-b border-slate-800 flex items-center gap-3 bg-slate-900/50">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                      <div className="p-4 md:p-5 border-b border-slate-800 flex items-center gap-3 bg-slate-900/50">
+                        {/* Bouton retour (mobile uniquement) */}
+                        <button 
+                          onClick={() => setSelectedChatId(null)} 
+                          className="md:hidden p-1 text-slate-400 hover:text-white shrink-0"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
                           {(selectedClientInfo?.companyName || selectedConversation?.userEmail || "?").charAt(0).toUpperCase()}
                         </div>
-                        <div>
-                          <h4 className="font-bold text-white text-sm">{selectedClientInfo?.companyName || selectedConversation?.userEmail || selectedChatId}</h4>
-                          <p className="text-xs text-slate-400">{selectedClientInfo?.email || selectedConversation?.userEmail}</p>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-white text-sm truncate">{selectedClientInfo?.companyName || selectedConversation?.userEmail || selectedChatId}</h4>
+                          <p className="text-xs text-slate-400 truncate">{selectedClientInfo?.email || selectedConversation?.userEmail}</p>
                         </div>
                       </div>
 
-                      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
                         {chatMessages.map((msg) => (
                           <div key={msg.id} className={`flex ${msg.isAdmin ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[70%] p-3 rounded-2xl text-sm shadow-sm ${
+                            <div className={`max-w-[80%] md:max-w-[70%] p-3 rounded-2xl text-sm shadow-sm ${
                               msg.isAdmin 
                                 ? 'bg-blue-600 text-white rounded-br-none' 
                                 : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-none'
@@ -851,13 +931,13 @@ export default function AdminDashboardPage() {
                         <div ref={chatScrollRef} />
                       </div>
 
-                      <form onSubmit={handleSendReply} className="p-4 border-t border-slate-800 flex gap-2 bg-slate-900/50">
+                      <form onSubmit={handleSendReply} className="p-3 md:p-4 border-t border-slate-800 flex gap-2 bg-slate-900/50">
                         <input
                           type="text"
                           value={replyText}
                           onChange={(e) => setReplyText(e.target.value)}
                           placeholder="Écrire une réponse..."
-                          className="flex-1 p-3 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                          className="flex-1 p-3 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all min-w-0"
                         />
                         <button
                           type="submit"
