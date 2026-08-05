@@ -6,7 +6,6 @@ import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, updateDoc, deleteDoc, collection, getDocs } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
-import { fixOklchColors } from "@/app/utils/pdfColorFix";
 
 function numberToWords(num) {
   if (num === null || num === undefined || isNaN(num)) return "0 (0) Franc CFA";
@@ -121,39 +120,6 @@ async function shareFileNatively(blob, filename, text) {
     if (err && err.name === "AbortError") return true;
     return false;
   }
-}
-
-const HTML2PDF_CDN_URL = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-let html2pdfLoadingPromise = null;
-
-function loadHtml2Pdf() {
-  if (typeof window === "undefined") return Promise.reject(new Error("SSR"));
-  if (window.html2pdf) return Promise.resolve(window.html2pdf);
-  if (html2pdfLoadingPromise) return html2pdfLoadingPromise;
-
-  html2pdfLoadingPromise = new Promise((resolve, reject) => {
-    let script = document.querySelector('script[data-html2pdf-loader="true"]');
-    if (!script) {
-      script = document.createElement("script");
-      script.src = HTML2PDF_CDN_URL;
-      script.async = true;
-      script.dataset.html2pdfLoader = "true";
-      document.head.appendChild(script);
-    }
-    const onLoad = () => {
-      if (window.html2pdf) resolve(window.html2pdf);
-      else reject(new Error("html2pdf introuvable après chargement du script."));
-    };
-    const onError = () => {
-      html2pdfLoadingPromise = null;
-      reject(new Error("Impossible de charger la librairie de génération PDF."));
-    };
-    script.addEventListener("load", onLoad, { once: true });
-    script.addEventListener("error", onError, { once: true });
-    if (window.html2pdf) resolve(window.html2pdf);
-  });
-
-  return html2pdfLoadingPromise;
 }
 
 const TOAST_DURATION = 4000;
@@ -281,18 +247,22 @@ function ShareModal({ open, onClose, defaultPhone, defaultEmail, defaultMessage,
   );
 }
 
+// ============================================================
+// COMPOSANT SIGNATURE — réutilisable dans les deux sections
+// ============================================================
 function SignatureBlock({ stampSignatureUrl, paymentInfo }) {
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 print:gap-4">
       {/* Bloc paiement à gauche */}
-      <div className="text-[10px] print:text-[9px] text-gray-500">
+      <div className="text-[9px] print:text-[8px] text-gray-500">
         {paymentInfo}
       </div>
 
       {/* Bloc responsable à droite */}
       <div className="text-center">
-        <p className="font-bold text-[12px] print:text-[11px] underline mb-2">LE RESPONSABLE</p>
+        <p className="font-bold text-[11px] print:text-[10px] underline mb-2">LE RESPONSABLE</p>
         {stampSignatureUrl ? (
+          // 🆕 Image cachet+signature importée
           <div style={{ width: "160px", height: "80px" }} className="flex items-center justify-center">
             <img
               src={stampSignatureUrl}
@@ -307,8 +277,9 @@ function SignatureBlock({ stampSignatureUrl, paymentInfo }) {
             />
           </div>
         ) : (
+          // Placeholder si pas d'image
           <div
-            className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[10px] print:text-[9px] text-gray-400 italic"
+            className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[9px] print:text-[8px] text-gray-400 italic"
             style={{ width: "160px", height: "70px" }}
           >
             Cachet &amp; Signature
@@ -351,10 +322,6 @@ export default function InvoiceDetailOrEditPage() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const showToast = useCallback((message, type = "success", title) => { setToast({ message, type, title }); }, []);
-
-  useEffect(() => {
-    loadHtml2Pdf().catch(() => { /* on retentera au moment du clic */ });
-  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -458,55 +425,34 @@ export default function InvoiceDetailOrEditPage() {
   const pdfFilename = `${docLabel}_${invoice?.number || ""}.pdf`;
 
   const pdfOptions = useMemo(() => ({
-    margin: 0,
-    filename: pdfFilename,
+    margin: 0, filename: pdfFilename,
     image: { type: "jpeg", quality: 0.98 },
-    html2canvas: {
-      scale: 2,
-      useCORS: true,
-      letterRendering: true,
-      windowWidth: 1024,
-      scrollX: 0,
-      scrollY: 0,
-      onclone: (clonedDoc) => fixOklchColors(clonedDoc),
-    },
+    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
     jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-    pagebreak: { mode: ["css", "legacy"], avoid: ["tr", "img", ".invoice-signature-wrapper"] },
   }), [pdfFilename]);
 
   const getPdfBlob = useCallback(async () => {
     const element = document.getElementById("invoice-printable-container");
-    if (!element) return null;
-    try {
-      const html2pdf = await loadHtml2Pdf();
-      return await html2pdf().set(pdfOptions).from(element).outputPdf("blob");
-    } catch (error) {
-      console.error("Erreur chargement html2pdf :", error);
-      return null;
-    }
+    if (typeof window === "undefined" || !window.html2pdf || !element) return null;
+    return await window.html2pdf().set(pdfOptions).from(element).outputPdf("blob");
   }, [pdfOptions]);
 
-  // Plus aucune alerte ("showToast") en cas d'échec de la génération PDF,
-  // la fonction bascule silencieusement sur l'impression native.
   const handlePrint = async () => {
     const originalTitle = document.title;
     document.title = `${docLabel}_${invoice.number}_${invoice.clientName || "Client"}`;
-    setIsGeneratingPdf(true);
     try {
       const element = document.getElementById("invoice-printable-container");
-      const html2pdf = await loadHtml2Pdf();
-      if (element && html2pdf) {
-        await html2pdf().from(element).set(pdfOptions).save();
-      } else {
-        window.print();
-      }
+      if (typeof window !== "undefined" && window.html2pdf && element) {
+        setIsGeneratingPdf(true);
+        await window.html2pdf().from(element).set(pdfOptions).save();
+        setIsGeneratingPdf(false);
+      } else { window.print(); }
     } catch (error) {
-      console.error("Erreur PDF (fallback silencieux vers impression standard):", error);
-      window.print();
-    } finally {
+      console.error("Erreur PDF:", error);
+      showToast("Erreur PDF. Impression standard utilisée.", "error");
       setIsGeneratingPdf(false);
-      setTimeout(() => { document.title = originalTitle; }, 1000);
-    }
+      window.print();
+    } finally { setTimeout(() => { document.title = originalTitle; }, 1000); }
   };
 
   const handleOpenShare = () => {
@@ -522,6 +468,7 @@ export default function InvoiceDetailOrEditPage() {
   if (!invoice) return null;
 
   const brandColor = company.primaryColor || "#2563eb";
+  // 🆕 Récupération de l'image cachet+signature
   const stampSignatureUrl = company.stampSignatureUrl || "";
   const montantArrete = applyRsps ? netAPayer : totalTtc;
   const currentStatusBadge = getStatusBadge(invoice.status);
@@ -543,8 +490,9 @@ export default function InvoiceDetailOrEditPage() {
   };
   const watermarkImgStyle = { width: "60%", maxWidth: "320px", objectFit: "contain", filter: "grayscale(100%)" };
 
+  // Infos paiement pour le bloc signature
   const paymentInfoNode = invoicePaidOrPartial && normalizeStatus(invoice.status) === STATUS.PAID ? (
-    <p className="border border-green-500 text-green-700 px-2 py-1 rounded inline-block font-bold text-[10px] print:text-[9px]">
+    <p className="border border-green-500 text-green-700 px-2 py-1 rounded inline-block font-bold text-[9px] print:text-[8px]">
       ✓ Réglé par {invoice.paymentMethod || "Espèces"} le{" "}
       {invoice.paymentDate ? new Date(invoice.paymentDate).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR")}
     </p>
@@ -580,6 +528,8 @@ export default function InvoiceDetailOrEditPage() {
           .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
           .logo-img-option1 { height: 210px !important; width: auto !important; max-width: 420px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
           .logo-img-option2 { height: 110px !important; width: auto !important; max-width: 220px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
+          
+          /* 🆕 Impression cachet+signature */
           .stamp-signature-img { max-width: 160px !important; max-height: 80px !important; object-fit: contain !important; display: block !important; }
         }
       `}</style>
@@ -764,8 +714,10 @@ export default function InvoiceDetailOrEditPage() {
               </div>
             </div>
 
+            {/* WRAPPER SIGNATURE + FOOTER */}
             <div className="invoice-signature-wrapper">
               <div className="invoice-signature mt-4 print:mt-0">
+                {/* 🆕 Utilisation du composant SignatureBlock */}
                 <SignatureBlock
                   stampSignatureUrl={stampSignatureUrl}
                   paymentInfo={paymentInfoNode}
@@ -773,8 +725,8 @@ export default function InvoiceDetailOrEditPage() {
               </div>
 
               <div className="invoice-footer mt-4 print:mt-0">
-                <div className="w-full border-t-2 pt-1.5 print:pt-1 text-[10px] print:text-[9px] text-center text-gray-600 bg-white" style={{ borderColor: brandColor }}>
-                  <p className="font-bold text-gray-900 text-[11px] print:text-[10px] mb-0.5">{company.companyName}</p>
+                <div className="w-full border-t-2 pt-1.5 print:pt-1 text-[9px] print:text-[8px] text-center text-gray-600 bg-white" style={{ borderColor: brandColor }}>
+                  <p className="font-bold text-gray-900 text-[10px] print:text-[9px] mb-0.5">{company.companyName}</p>
                   <div className="flex justify-center gap-x-2 gap-y-0 flex-wrap font-medium">
                     {company.address && <span>📍 {company.address}</span>}
                     {company.phone && <span>📞 {company.phone}</span>}

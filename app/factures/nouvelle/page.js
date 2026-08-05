@@ -6,7 +6,6 @@ import { onAuthStateChanged } from "firebase/auth";
 import { collection, getDocs, addDoc, doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../../../firebase";
 import { useSubscription } from "@/components/SubscriptionProvider";
-import { fixOklchColors } from "@/app/utils/pdfColorFix";
 
 function numberToWords(num) {
   if (num === null || num === undefined || isNaN(num)) return "0 (0) Franc CFA";
@@ -82,19 +81,14 @@ function normalizePhone(raw, defaultCode = "228") {
   else if (digits.length > 0 && digits.length <= 9) digits = defaultCode + digits;
   return digits;
 }
-
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
-
 async function shareFileNatively(blob, filename, text) {
   try {
     if (typeof navigator === "undefined" || !navigator.share || typeof File === "undefined") return false;
@@ -236,10 +230,13 @@ function ShareModal({ open, onClose, defaultPhone, defaultEmail, defaultMessage,
   );
 }
 
+// ============================================================
+// COMPOSANT SIGNATURE
+// ============================================================
 function SignatureBlock({ stampSignatureUrl }) {
   return (
     <div className="text-center">
-      <p className="font-bold text-[12px] print:text-[11px] underline mb-2">LE RESPONSABLE</p>
+      <p className="font-bold text-[11px] print:text-[10px] underline mb-2">LE RESPONSABLE</p>
       {stampSignatureUrl ? (
         <div style={{ width: "160px", height: "80px" }} className="flex items-center justify-center">
           <img
@@ -252,7 +249,7 @@ function SignatureBlock({ stampSignatureUrl }) {
         </div>
       ) : (
         <div
-          className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[10px] print:text-[9px] text-gray-400 italic"
+          className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[9px] print:text-[8px] text-gray-400 italic"
           style={{ width: "160px", height: "70px" }}
         >
           Cachet &amp; Signature
@@ -381,25 +378,13 @@ export default function NewInvoicePage() {
 
   const selectedCustomerObj = customers.find((c) => c.id === selectedClientId);
   const docLabel = documentType === "PROFORMA" ? "Proforma" : "Facture";
-
-  const sanitize = (str) => (str || "").toString().replace(/[\\/:*?"<>|]/g, "-").trim();
-  const pdfFilename = `${sanitize(docLabel)}_${sanitize(invoiceNumber)}.pdf`;
+  const pdfFilename = `${docLabel}_${invoiceNumber}.pdf`;
 
   const pdfOptions = useMemo(() => ({
-    margin: 0,
-    filename: pdfFilename,
+    margin: 0, filename: pdfFilename,
     image: { type: "jpeg", quality: 0.98 },
-    html2canvas: {
-      scale: 2,
-      useCORS: true,
-      letterRendering: true,
-      windowWidth: 900,
-      scrollX: 0,
-      scrollY: 0,
-      onclone: (clonedDoc) => fixOklchColors(clonedDoc),
-    },
+    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
     jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-    pagebreak: { mode: ["css", "legacy"], avoid: ["tr", "img"] },
   }), [pdfFilename]);
 
   const getPdfBlob = useCallback(async () => {
@@ -408,29 +393,22 @@ export default function NewInvoicePage() {
     return await window.html2pdf().set(pdfOptions).from(element).outputPdf("blob");
   }, [pdfOptions]);
 
-  // Plus aucune alerte ("showToast") en cas d'échec de la génération PDF,
-  // la fonction bascule silencieusement sur l'impression native.
   const handlePrint = async () => {
-    setIsGeneratingPdf(true);
+    const originalTitle = document.title;
+    document.title = `${docLabel}_${invoiceNumber}_${selectedCustomerObj?.name || selectedCustomerObj?.businessName || "Client"}`;
     try {
-      const blob = await getPdfBlob();
-      if (blob) {
-        downloadBlob(blob, pdfFilename);
-      } else {
-        const originalTitle = document.title;
-        document.title = `${docLabel}_${invoiceNumber}`;
-        window.print();
-        setTimeout(() => { document.title = originalTitle; }, 1000);
-      }
+      const element = document.getElementById("invoice-printable-container");
+      if (typeof window !== "undefined" && window.html2pdf && element) {
+        setIsGeneratingPdf(true);
+        await window.html2pdf().from(element).set(pdfOptions).save();
+        setIsGeneratingPdf(false);
+      } else { window.print(); }
     } catch (error) {
-      console.error("Erreur PDF (fallback silencieux vers impression standard):", error);
-      const originalTitle = document.title;
-      document.title = `${docLabel}_${invoiceNumber}`;
-      window.print();
-      setTimeout(() => { document.title = originalTitle; }, 1000);
-    } finally {
+      console.error("Erreur PDF:", error);
+      showToast("Erreur PDF. Impression standard utilisée.", "error");
       setIsGeneratingPdf(false);
-    }
+      window.print();
+    } finally { setTimeout(() => { document.title = originalTitle; }, 1000); }
   };
 
   const handleSubmit = async () => {
@@ -505,6 +483,7 @@ export default function NewInvoicePage() {
 
       {/* ── HEADER avec bouton Annuler ── */}
       <header className="print-hidden h-20 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-8 sticky top-0 z-10 shadow-sm">
+        {/* Gauche : Retour + Titre */}
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -516,7 +495,9 @@ export default function NewInvoicePage() {
           <h1 className="text-lg sm:text-xl font-bold">Nouveau Document</h1>
         </div>
 
+        {/* Droite : Annuler + Enregistrer */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* ✅ BOUTON ANNULER */}
           <button
             type="button"
             onClick={() => router.push("/factures")}
@@ -528,6 +509,7 @@ export default function NewInvoicePage() {
             Annuler
           </button>
 
+          {/* Bouton Enregistrer */}
           <button
             onClick={handleOpenPreview}
             disabled={isExpired}
@@ -559,6 +541,7 @@ export default function NewInvoicePage() {
       <main className="print-hidden max-w-4xl mx-auto mt-8 bg-white p-4 md:p-8 rounded-2xl shadow-sm border border-gray-200">
         <form onSubmit={handleOpenPreview} className="space-y-6">
 
+          {/* Sélecteur type document */}
           <div className="flex gap-4 p-1 bg-gray-100 rounded-xl w-max">
             <button
               type="button"
@@ -576,6 +559,7 @@ export default function NewInvoicePage() {
             </button>
           </div>
 
+          {/* Client / Numéro / Date */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Client *</label>
@@ -615,6 +599,7 @@ export default function NewInvoicePage() {
             </div>
           </div>
 
+          {/* Lignes de prestations */}
           <div className="pt-4 border-t">
             <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide mb-3">
               Désignation des prestations / produits
@@ -667,6 +652,7 @@ export default function NewInvoicePage() {
             </button>
           </div>
 
+          {/* Remise / TVA / RSPS */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t bg-gray-50 p-4 rounded-xl">
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Remise (Montant F CFA)</label>
@@ -716,6 +702,7 @@ export default function NewInvoicePage() {
             </div>
           </div>
 
+          {/* Récapitulatif financier */}
           <div className="flex justify-end pt-4">
             <div className="w-full sm:w-80 space-y-2 text-sm">
               <div className="flex justify-between text-gray-600">
@@ -745,6 +732,7 @@ export default function NewInvoicePage() {
             </div>
           </div>
 
+          {/* ✅ BOUTON ANNULER visible sur mobile (bas du formulaire) */}
           <div className="flex justify-start pt-2 sm:hidden">
             <button
               type="button"
@@ -778,18 +766,15 @@ export default function NewInvoicePage() {
               .invoice-modal-backdrop { display: contents !important; }
               .invoice-scroll-wrapper { display: contents !important; }
               #invoice-printable-container {
-                width: 210mm !important;
-                min-height: 297mm !important;
-                max-height: 297mm !important;
-                overflow: hidden !important;
-                box-sizing: border-box !important;
-                margin: 0 !important;
+                width: 210mm !important; height: 297mm !important; max-height: 297mm !important;
+                overflow: hidden !important; box-sizing: border-box !important;
+                padding: 2mm 12mm 4mm 12mm !important; margin: 0 !important;
                 border-radius: 0 !important; border: none !important; box-shadow: none !important;
               }
               .invoice-content { position: relative !important; }
               .header-grid-option1 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 14px !important; border-bottom: 1px solid #1f2937 !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; align-items: center !important; }
               .header-option2 { display: flex !important; flex-direction: row !important; justify-content: space-between !important; align-items: center !important; border-bottom: 2px solid ${mainColor} !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; gap: 12px !important; flex-wrap: wrap !important; }
-              .invoice-signature-wrapper { min-height: 90mm !important; display: flex !important; flex-direction: column !important; justify-content: flex-end !important; }
+              .invoice-signature-wrapper { min-height: 94mm !important; display: flex !important; flex-direction: column !important; justify-content: flex-end !important; }
               .invoice-signature { margin-bottom: 3mm !important; }
               .invoice-footer { margin-top: 0 !important; padding-bottom: 1mm !important; }
               .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
@@ -810,164 +795,161 @@ export default function NewInvoicePage() {
           </button>
 
           <div className="invoice-scroll-wrapper min-h-full flex items-start justify-center p-2 sm:p-4 pb-32 print:p-0 print:pb-0">
-            <div className="max-w-3xl w-full my-4 md:my-8 print:m-0 print:max-w-none">
-              <div
-                id="invoice-printable-container"
-                onClick={(e) => e.stopPropagation()}
-                className="bg-white rounded-2xl shadow-2xl relative border border-gray-100 print:shadow-none print:border-none print:rounded-none"
-                style={{ padding: "8mm 10mm", boxSizing: "border-box", width: "100%" }}
-              >
-                <div className="invoice-content relative bg-white">
-                  {companyData?.logoUrl && (
-                    <div style={watermarkStyle}>
-                      <img src={companyData.logoUrl} alt="" crossOrigin="anonymous" style={watermarkImgStyle} />
-                    </div>
-                  )}
+            <div
+              id="invoice-printable-container"
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl max-w-3xl w-full my-4 md:my-8 shadow-2xl relative border border-gray-100 px-6 py-8 md:p-10 print:shadow-none print:border-none print:p-0 print:m-0"
+            >
+              <div className="invoice-content relative bg-white">
+                {companyData?.logoUrl && (
+                  <div style={watermarkStyle}>
+                    <img src={companyData.logoUrl} alt="" crossOrigin="anonymous" style={watermarkImgStyle} />
+                  </div>
+                )}
 
-                  {activePrintOption === "2" ? (
-                    <div className="header-option2" style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${mainColor}`, paddingBottom: "8px", marginBottom: "8px", position: "relative", zIndex: 10, gap: "12px", flexWrap: "wrap" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                        {companyData?.logoUrl && (
-                          <img src={companyData.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option2" style={{ height: "110px", width: "auto", maxWidth: "220px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                        )}
-                        <div>
-                          <p style={{ fontSize: "14px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: 0 }}>{companyData?.companyName || "SOCIÉTÉ"}</p>
-                          <p style={{ fontSize: "11px", color: "#4b5563", margin: "2px 0 0 0" }}>{companyData?.address}</p>
-                          <p style={{ fontSize: "11px", color: "#4b5563", margin: "1px 0 0 0" }}>{companyData?.phone}{companyData?.email ? ` | ${companyData.email}` : ""}</p>
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <p style={{ fontSize: "11px", fontWeight: "600", color: "#111827", margin: 0 }}>NIF : {companyData?.nif || "---"} | RCCM : {companyData?.rccm || "---"}</p>
-                        {companyData?.services && <p style={{ fontSize: "10px", color: "#6b7280", fontStyle: "italic", marginTop: "3px", maxWidth: "200px" }}>{companyData.services}</p>}
+                {activePrintOption === "2" ? (
+                  <div className="header-option2" style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${mainColor}`, paddingBottom: "8px", marginBottom: "8px", position: "relative", zIndex: 10, gap: "12px", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      {companyData?.logoUrl && (
+                        <img src={companyData.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option2" style={{ height: "110px", width: "auto", maxWidth: "220px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                      )}
+                      <div>
+                        <p style={{ fontSize: "14px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: 0 }}>{companyData?.companyName || "SOCIÉTÉ"}</p>
+                        <p style={{ fontSize: "11px", color: "#4b5563", margin: "2px 0 0 0" }}>{companyData?.address}</p>
+                        <p style={{ fontSize: "11px", color: "#4b5563", margin: "1px 0 0 0" }}>{companyData?.phone}{companyData?.email ? ` | ${companyData.email}` : ""}</p>
                       </div>
                     </div>
-                  ) : (
-                    <div className="header-grid-option1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", borderBottom: "1px solid #1f2937", paddingBottom: "8px", marginBottom: "0", position: "relative", zIndex: 10, alignItems: "center" }}>
-                      <div className="logo-container-option1" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "210px", width: "100%", overflow: "hidden", flexShrink: 0 }}>
-                        {companyData?.logoUrl ? (
-                          <img src={companyData.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option1" style={{ height: "210px", width: "auto", maxWidth: "420px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                        ) : (
-                          <span style={{ fontSize: "22px", fontWeight: "900", color: "#1f2937", letterSpacing: "0.05em" }}>{companyData?.companyName || "LOGO"}</span>
-                        )}
-                      </div>
-                      <div style={{ borderLeft: `4px solid ${mainColor}`, paddingLeft: "12px", display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "center" }}>
-                        <p style={{ fontWeight: "700", textTransform: "uppercase", fontSize: "11px", color: mainColor, margin: "0 0 4px 0" }}>Nos Services</p>
-                        <p style={{ fontSize: "11px", color: "#4b5563", whiteSpace: "pre-line", lineHeight: "1.5", margin: 0 }}>{companyData?.services}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-1.5 relative z-10 gap-2">
-                    <div className="text-white px-3 py-1.5 rounded font-bold text-xs shadow-sm w-full sm:w-auto text-center sm:text-left" style={{ backgroundColor: mainColor }}>
-                      {isProforma ? "PROFORMA" : "FACTURE"} N° {invoiceNumber} / {companyData?.companyName || "Société"} / {invoiceDate ? new Date(invoiceDate).getFullYear() : new Date().getFullYear()}
-                    </div>
-                    <div className="w-full sm:w-auto text-right italic text-xs font-medium">
-                      {companyData?.city ? `${companyData.city}, le ` : "Fait le "}{invoiceDate ? new Date(invoiceDate).toLocaleDateString("fr-FR") : ""}
+                    <div style={{ textAlign: "right" }}>
+                      <p style={{ fontSize: "11px", fontWeight: "600", color: "#111827", margin: 0 }}>NIF : {companyData?.nif || "---"} | RCCM : {companyData?.rccm || "---"}</p>
+                      {companyData?.services && <p style={{ fontSize: "10px", color: "#6b7280", fontStyle: "italic", marginTop: "3px", maxWidth: "200px" }}>{companyData.services}</p>}
                     </div>
                   </div>
-
-                  <div className="flex justify-end relative z-10 mt-1.5">
-                    <div className="w-[300px] max-w-full border border-gray-300 bg-gray-100 p-2 text-[11px] space-y-0.5 rounded-lg shadow-sm">
-                      <p className="font-bold text-gray-900">DOIT : {clientDisplayName}</p>
-                      <p className="text-gray-700">NIF : {clientNifDisplay}</p>
-                      <p className="text-gray-700">Adresse : {selectedCustomerObj?.address || "N/A"}</p>
-                      <p className="text-gray-700">Tel : {selectedCustomerObj?.phone || "---"}</p>
+                ) : (
+                  <div className="header-grid-option1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", borderBottom: "1px solid #1f2937", paddingBottom: "8px", marginBottom: "0", position: "relative", zIndex: 10, alignItems: "center" }}>
+                    <div className="logo-container-option1" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "210px", width: "100%", overflow: "hidden", flexShrink: 0 }}>
+                      {companyData?.logoUrl ? (
+                        <img src={companyData.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option1" style={{ height: "210px", width: "auto", maxWidth: "420px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                      ) : (
+                        <span style={{ fontSize: "22px", fontWeight: "900", color: "#1f2937", letterSpacing: "0.05em" }}>{companyData?.companyName || "LOGO"}</span>
+                      )}
+                    </div>
+                    <div style={{ borderLeft: `4px solid ${mainColor}`, paddingLeft: "12px", display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "center" }}>
+                      <p style={{ fontWeight: "700", textTransform: "uppercase", fontSize: "11px", color: mainColor, margin: "0 0 4px 0" }}>Nos Services</p>
+                      <p style={{ fontSize: "11px", color: "#4b5563", whiteSpace: "pre-line", lineHeight: "1.5", margin: 0 }}>{companyData?.services}</p>
                     </div>
                   </div>
+                )}
 
-                  <div className="relative z-10 mt-2 overflow-x-auto print:overflow-visible">
-                    <table className="w-full text-left text-[10px] border-collapse border border-gray-400 bg-white">
-                      <thead>
-                        <tr className="bg-gray-200 border border-gray-400 text-gray-800 font-bold">
-                          <th className="p-1.5 border border-gray-400">Descriptions</th>
-                          <th className="p-1.5 border border-gray-400 text-center w-12">Qté</th>
-                          <th className="p-1.5 border border-gray-400 text-right w-24">Pu</th>
-                          <th className="p-1.5 border border-gray-400 text-right w-28">Montant</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((item, idx) => (
-                          <tr key={item.id ?? idx} className="border border-gray-300">
-                            <td className="p-1.5 border border-gray-300 break-words">{item.description || "-"}</td>
-                            <td className="p-1.5 border border-gray-300 text-center">{item.quantity}</td>
-                            <td className="p-1.5 border border-gray-300 text-right whitespace-nowrap">{Number(item.unitPrice).toLocaleString("fr-FR")}</td>
-                            <td className="p-1.5 border border-gray-300 text-right font-medium whitespace-nowrap">{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString("fr-FR")}</td>
-                          </tr>
-                        ))}
-                        <tr className="border border-gray-400 font-bold bg-gray-50">
-                          <td colSpan="3" className="p-1.5 border border-gray-400 text-right">TOTAL GENERAL</td>
-                          <td className="p-1.5 border border-gray-400 text-right whitespace-nowrap">{totalBrut.toLocaleString("fr-FR")}</td>
-                        </tr>
-                        {montantRemise > 0 && (
-                          <tr className="border border-gray-400 font-bold bg-gray-50">
-                            <td colSpan="3" className="p-1.5 border border-gray-400 text-right text-red-600">REMISE</td>
-                            <td className="p-1.5 border border-gray-400 text-right text-red-600 whitespace-nowrap">- {montantRemise.toLocaleString("fr-FR")}</td>
-                          </tr>
-                        )}
-                        <tr className="border border-gray-400 font-bold bg-gray-100">
-                          <td colSpan="3" className="p-1.5 border border-gray-400 text-right">TOTAL HORS TAXE</td>
-                          <td className="p-1.5 border border-gray-400 text-right whitespace-nowrap">{totalHt.toLocaleString("fr-FR")}</td>
-                        </tr>
-                        {hasTva && (
-                          <tr className="border border-gray-400 font-bold bg-gray-50">
-                            <td colSpan="3" className="p-1.5 border border-gray-400 text-right">TVA ({tvaRate}%)</td>
-                            <td className="p-1.5 border border-gray-400 text-right whitespace-nowrap">{calculatedTvaAmount.toLocaleString("fr-FR")}</td>
-                          </tr>
-                        )}
-                        <tr className="border border-gray-400 font-extrabold bg-gray-200">
-                          <td colSpan="3" className="p-1.5 border border-gray-400 text-right">MONTANT TTC</td>
-                          <td className="p-1.5 border border-gray-400 text-right whitespace-nowrap">{(totalHt + calculatedTvaAmount).toLocaleString("fr-FR")}</td>
-                        </tr>
-                        {hasRsps && (
-                          <tr className="border border-gray-400 font-bold bg-gray-50">
-                            <td colSpan="3" className="p-1.5 border border-gray-400 text-right text-amber-700">RSPS ({rspsRate}%)</td>
-                            <td className="p-1.5 border border-gray-400 text-right text-amber-700 whitespace-nowrap">- {calculatedRspsAmount.toLocaleString("fr-FR")}</td>
-                          </tr>
-                        )}
-                        {hasRsps && (
-                          <tr className="border border-gray-400 font-extrabold bg-gray-300">
-                            <td colSpan="3" className="p-1.5 border border-gray-400 text-right">NET À PAYER</td>
-                            <td className="p-1.5 border border-gray-400 text-right whitespace-nowrap">{totalTtc.toLocaleString("fr-FR")}</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-1.5 relative z-10 gap-2">
+                  <div className="text-white px-3 py-1.5 rounded font-bold text-xs shadow-sm w-full sm:w-auto text-center sm:text-left" style={{ backgroundColor: mainColor }}>
+                    {isProforma ? "PROFORMA" : "FACTURE"} N° {invoiceNumber} / {companyData?.companyName || "Société"} / {invoiceDate ? new Date(invoiceDate).getFullYear() : new Date().getFullYear()}
                   </div>
-
-                  <div className="text-[10px] italic font-medium relative z-10 pt-1">
-                    Arrêté à la somme de : <br className="block md:hidden" />
-                    <span className="font-bold underline">{numberToWords(totalTtc)}</span>
+                  <div className="w-full sm:w-auto text-right italic text-xs font-medium">
+                    {companyData?.city ? `${companyData.city}, le ` : "Fait le "}{invoiceDate ? new Date(invoiceDate).toLocaleDateString("fr-FR") : ""}
                   </div>
-
-                  {isProforma && (
-                    <div className="mt-4 pt-3 border-t text-[9px] text-gray-500 text-center font-medium relative z-10">
-                      * Ce document est une facture proforma établie à titre indicatif et ne constitue pas une demande de paiement définitif.
-                    </div>
-                  )}
                 </div>
 
-                {/* WRAPPER SIGNATURE + FOOTER */}
-                <div className="invoice-signature-wrapper">
-                  <div className="invoice-signature mt-4">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
-                      <div />
-                      <SignatureBlock stampSignatureUrl={stampSignatureUrl} />
-                    </div>
+                <div className="flex justify-end relative z-10 mt-1.5">
+                  <div className="w-[300px] max-w-full border border-gray-300 bg-gray-100 p-2 text-[11px] space-y-0.5 rounded-lg shadow-sm">
+                    <p className="font-bold text-gray-900">DOIT : {clientDisplayName}</p>
+                    <p className="text-gray-700">NIF : {clientNifDisplay}</p>
+                    <p className="text-gray-700">Adresse : {selectedCustomerObj?.address || "N/A"}</p>
+                    <p className="text-gray-700">Tel : {selectedCustomerObj?.phone || "---"}</p>
                   </div>
+                </div>
 
-                  <div className="invoice-footer mt-4">
-                    <div className="w-full border-t-2 pt-1.5 text-[10px] text-center text-gray-600 bg-white" style={{ borderColor: mainColor }}>
-                      <p className="font-bold text-gray-900 text-[11px] mb-0.5">{companyData?.companyName}</p>
-                      <div className="flex justify-center gap-x-2 gap-y-0 flex-wrap font-medium">
-                        {companyData?.address && <span>📍 {companyData.address}</span>}
-                        {companyData?.phone && <span>📞 {companyData.phone}</span>}
-                        {companyData?.email && <span>✉️ {companyData.email}</span>}
-                        {companyData?.website && <span>🌐 {companyData.website}</span>}
-                      </div>
-                      <p className="tracking-tight mt-0.5">
-                        NIF : {companyData?.nif || "---"} | RCCM : {companyData?.rccm || "---"} | N° CNSS : {companyData?.cnss || "---"}
-                      </p>
+                <div className="relative z-10 mt-2 overflow-x-auto print:overflow-visible">
+                  <table className="w-full text-left text-[10px] border-collapse border border-gray-400 bg-white">
+                    <thead>
+                      <tr className="bg-gray-200 border border-gray-400 text-gray-800 font-bold">
+                        <th className="p-1.5 border border-gray-400">Descriptions</th>
+                        <th className="p-1.5 border border-gray-400 text-center w-12">Qté</th>
+                        <th className="p-1.5 border border-gray-400 text-right w-24">Pu</th>
+                        <th className="p-1.5 border border-gray-400 text-right w-28">Montant</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item, idx) => (
+                        <tr key={item.id ?? idx} className="border border-gray-300">
+                          <td className="p-1.5 border border-gray-300 break-words">{item.description || "-"}</td>
+                          <td className="p-1.5 border border-gray-300 text-center">{item.quantity}</td>
+                          <td className="p-1.5 border border-gray-300 text-right whitespace-nowrap">{Number(item.unitPrice).toLocaleString("fr-FR")}</td>
+                          <td className="p-1.5 border border-gray-300 text-right font-medium whitespace-nowrap">{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString("fr-FR")}</td>
+                        </tr>
+                      ))}
+                      <tr className="border border-gray-400 font-bold bg-gray-50">
+                        <td colSpan="3" className="p-1.5 border border-gray-400 text-right">TOTAL GENERAL</td>
+                        <td className="p-1.5 border border-gray-400 text-right whitespace-nowrap">{totalBrut.toLocaleString("fr-FR")}</td>
+                      </tr>
+                      {montantRemise > 0 && (
+                        <tr className="border border-gray-400 font-bold bg-gray-50">
+                          <td colSpan="3" className="p-1.5 border border-gray-400 text-right text-red-600">REMISE</td>
+                          <td className="p-1.5 border border-gray-400 text-right text-red-600 whitespace-nowrap">- {montantRemise.toLocaleString("fr-FR")}</td>
+                        </tr>
+                      )}
+                      <tr className="border border-gray-400 font-bold bg-gray-100">
+                        <td colSpan="3" className="p-1.5 border border-gray-400 text-right">TOTAL HORS TAXE</td>
+                        <td className="p-1.5 border border-gray-400 text-right whitespace-nowrap">{totalHt.toLocaleString("fr-FR")}</td>
+                      </tr>
+                      {hasTva && (
+                        <tr className="border border-gray-400 font-bold bg-gray-50">
+                          <td colSpan="3" className="p-1.5 border border-gray-400 text-right">TVA ({tvaRate}%)</td>
+                          <td className="p-1.5 border border-gray-400 text-right whitespace-nowrap">{calculatedTvaAmount.toLocaleString("fr-FR")}</td>
+                        </tr>
+                      )}
+                      <tr className="border border-gray-400 font-extrabold bg-gray-200">
+                        <td colSpan="3" className="p-1.5 border border-gray-400 text-right">MONTANT TTC</td>
+                        <td className="p-1.5 border border-gray-400 text-right whitespace-nowrap">{(totalHt + calculatedTvaAmount).toLocaleString("fr-FR")}</td>
+                      </tr>
+                      {hasRsps && (
+                        <tr className="border border-gray-400 font-bold bg-gray-50">
+                          <td colSpan="3" className="p-1.5 border border-gray-400 text-right text-amber-700">RSPS ({rspsRate}%)</td>
+                          <td className="p-1.5 border border-gray-400 text-right text-amber-700 whitespace-nowrap">- {calculatedRspsAmount.toLocaleString("fr-FR")}</td>
+                        </tr>
+                      )}
+                      {hasRsps && (
+                        <tr className="border border-gray-400 font-extrabold bg-gray-300">
+                          <td colSpan="3" className="p-1.5 border border-gray-400 text-right">NET À PAYER</td>
+                          <td className="p-1.5 border border-gray-400 text-right whitespace-nowrap">{totalTtc.toLocaleString("fr-FR")}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="text-[10px] italic font-medium relative z-10 pt-1">
+                  Arrêté à la somme de : <br className="block md:hidden" />
+                  <span className="font-bold underline">{numberToWords(totalTtc)}</span>
+                </div>
+
+                {isProforma && (
+                  <div className="mt-4 pt-3 border-t text-[9px] text-gray-500 text-center font-medium relative z-10">
+                    * Ce document est une facture proforma établie à titre indicatif et ne constitue pas une demande de paiement définitif.
+                  </div>
+                )}
+              </div>
+
+              {/* WRAPPER SIGNATURE + FOOTER */}
+              <div className="invoice-signature-wrapper">
+                <div className="invoice-signature mt-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
+                    <div />
+                    <SignatureBlock stampSignatureUrl={stampSignatureUrl} />
+                  </div>
+                </div>
+
+                <div className="invoice-footer mt-4">
+                  <div className="w-full border-t-2 pt-1.5 text-[9px] text-center text-gray-600 bg-white" style={{ borderColor: mainColor }}>
+                    <p className="font-bold text-gray-900 text-[10px] mb-0.5">{companyData?.companyName}</p>
+                    <div className="flex justify-center gap-x-2 gap-y-0 flex-wrap font-medium">
+                      {companyData?.address && <span>📍 {companyData.address}</span>}
+                      {companyData?.phone && <span>📞 {companyData.phone}</span>}
+                      {companyData?.email && <span>✉️ {companyData.email}</span>}
+                      {companyData?.website && <span>🌐 {companyData.website}</span>}
                     </div>
+                    <p className="tracking-tight mt-0.5">
+                      NIF : {companyData?.nif || "---"} | RCCM : {companyData?.rccm || "---"} | N° CNSS : {companyData?.cnss || "---"}
+                    </p>
                   </div>
                 </div>
               </div>
