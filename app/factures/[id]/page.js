@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
@@ -92,6 +92,36 @@ function generateItemId() {
   return `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function normalizePhone(raw, defaultCode = "228") {
+  if (!raw) return "";
+  const first = String(raw).split(/[\/,;]/)[0];
+  let digits = first.replace(/[^\d+]/g, "");
+  if (digits.startsWith("+")) digits = digits.slice(1);
+  else if (digits.startsWith("00")) digits = digits.slice(2);
+  else if (digits.length > 0 && digits.length <= 9) digits = defaultCode + digits;
+  return digits;
+}
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+async function shareFileNatively(blob, filename, text) {
+  try {
+    if (typeof navigator === "undefined" || !navigator.share || typeof File === "undefined") return false;
+    const file = new File([blob], filename, { type: "application/pdf" });
+    if (navigator.canShare && !navigator.canShare({ files: [file] })) return false;
+    await navigator.share({ files: [file], title: filename, text });
+    return true;
+  } catch (err) {
+    if (err && err.name === "AbortError") return true;
+    return false;
+  }
+}
+
 const TOAST_DURATION = 4000;
 
 function Toast({ toast, onClose }) {
@@ -108,11 +138,10 @@ function Toast({ toast, onClose }) {
     <div className="print-hidden fixed bottom-6 right-6 z-[9999] animate-toast-in">
       <div className="relative flex items-start gap-3 bg-white pl-4 pr-4 py-3.5 rounded-xl shadow-2xl border border-gray-100 w-[320px] max-w-[calc(100vw-3rem)] overflow-hidden" style={{ borderLeft: `4px solid ${accentColor}` }} role="status">
         <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-white mt-0.5" style={{ backgroundColor: accentColor }}>
-          {isError ? (
-            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-9a1 1 0 112 0v3a1 1 0 11-2 0V9zm1-4a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" /></svg>
-          ) : (
-            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0l-3.5-3.5a1 1 0 111.4-1.4l2.8 2.8 6.8-6.8a1 1 0 011.4 0z" clipRule="evenodd" /></svg>
-          )}
+          {isError
+            ? <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-9a1 1 0 112 0v3a1 1 0 11-2 0V9zm1-4a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" /></svg>
+            : <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0l-3.5-3.5a1 1 0 111.4-1.4l2.8 2.8 6.8-6.8a1 1 0 011.4 0z" clipRule="evenodd" /></svg>
+          }
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900">{title}</p>
@@ -129,6 +158,138 @@ function Toast({ toast, onClose }) {
   );
 }
 
+function ShareModal({ open, onClose, defaultPhone, defaultEmail, defaultMessage, subject, filename, getPdfBlob, showToast }) {
+  const [tab, setTab] = useState("whatsapp");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (open) { setPhone(defaultPhone || ""); setEmail(defaultEmail || ""); setMessage(defaultMessage || ""); setTab("whatsapp"); }
+  }, [open, defaultPhone, defaultEmail, defaultMessage]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  const waNumber = normalizePhone(phone);
+  const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
+  const mailUrl = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+
+  const handleSend = async (channel) => {
+    if (channel === "whatsapp" && !waNumber) { showToast("Veuillez renseigner un numéro WhatsApp valide.", "error"); return; }
+    if (channel === "email" && !email) { showToast("Veuillez renseigner une adresse email.", "error"); return; }
+    setBusy(true);
+    try {
+      const blob = await getPdfBlob();
+      if (blob) {
+        const shared = await shareFileNatively(blob, filename, message);
+        if (shared) { setBusy(false); onClose(); return; }
+        downloadBlob(blob, filename);
+        showToast("PDF téléchargé. Joignez-le à votre message.", "success", "PDF prêt");
+      }
+      if (channel === "whatsapp") window.open(waUrl, "_blank", "noopener,noreferrer");
+      else window.location.href = mailUrl;
+    } catch (error) {
+      console.error("Erreur partage :", error);
+      showToast("Impossible de préparer le partage.", "error");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="print-hidden fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-100 p-5 my-8" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-bold text-gray-900">📤 Envoyer le document</h3>
+          <button type="button" onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center">✕</button>
+        </div>
+        <div className="flex gap-1 p-1 bg-gray-100 rounded-xl mb-4">
+          <button type="button" onClick={() => setTab("whatsapp")} className={`flex-1 px-3 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${tab === "whatsapp" ? "bg-white text-green-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>WhatsApp</button>
+          <button type="button" onClick={() => setTab("email")} className={`flex-1 px-3 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${tab === "email" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Email</button>
+        </div>
+        {tab === "whatsapp" ? (
+          <div><label className="block text-xs font-bold text-gray-600 uppercase mb-1">Numéro du destinataire</label>
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+228 90 00 00 00" className="w-full p-3 border rounded-xl bg-gray-50 text-sm focus:bg-white" />
+            {waNumber && <p className="text-[11px] text-gray-400 mt-1">Sera envoyé au : +{waNumber}</p>}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div><label className="block text-xs font-bold text-gray-600 uppercase mb-1">Email du destinataire</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="client@exemple.com" className="w-full p-3 border rounded-xl bg-gray-50 text-sm focus:bg-white" />
+            </div>
+            <div><label className="block text-xs font-bold text-gray-600 uppercase mb-1">Objet</label>
+              <input type="text" value={subject} readOnly className="w-full p-3 border rounded-xl bg-gray-100 text-sm text-gray-500" />
+            </div>
+          </div>
+        )}
+        <div className="mt-3">
+          <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Message</label>
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5} className="w-full p-3 border rounded-xl bg-gray-50 text-sm focus:bg-white resize-none" />
+        </div>
+        <div className="mt-4 bg-blue-50 border border-blue-100 text-blue-800 text-[11px] leading-snug rounded-xl p-3">
+          📎 Sur mobile, le PDF sera <b>directement joint</b> via le menu de partage. Sur ordinateur, il sera <b>téléchargé automatiquement</b>.
+        </div>
+        <button type="button" disabled={busy} onClick={() => handleSend(tab)} className={`w-full mt-4 px-5 py-3 text-white font-semibold rounded-xl text-sm shadow-md transition-colors disabled:opacity-60 flex items-center justify-center gap-2 ${tab === "whatsapp" ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700"}`}>
+          {busy && <span className="inline-block h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+          {busy ? "Préparation du PDF..." : tab === "whatsapp" ? "Envoyer via WhatsApp" : "Envoyer par Email"}
+        </button>
+        <p className="text-[11px] text-gray-400 text-center mt-3">
+          Rien ne s'ouvre ?{" "}
+          <a href={tab === "whatsapp" ? waUrl : mailUrl} target="_blank" rel="noopener noreferrer" className="underline font-medium text-gray-600">Cliquez ici</a>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// COMPOSANT SIGNATURE — réutilisable dans les deux sections
+// ============================================================
+function SignatureBlock({ stampSignatureUrl, paymentInfo }) {
+  return (
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 print:gap-4">
+      {/* Bloc paiement à gauche */}
+      <div className="text-[9px] print:text-[8px] text-gray-500">
+        {paymentInfo}
+      </div>
+
+      {/* Bloc responsable à droite */}
+      <div className="text-center">
+        <p className="font-bold text-[11px] print:text-[10px] underline mb-2">LE RESPONSABLE</p>
+        {stampSignatureUrl ? (
+          // 🆕 Image cachet+signature importée
+          <div style={{ width: "160px", height: "80px" }} className="flex items-center justify-center">
+            <img
+              src={stampSignatureUrl}
+              alt="Cachet & Signature"
+              crossOrigin="anonymous"
+              style={{
+                maxWidth: "160px",
+                maxHeight: "80px",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+          </div>
+        ) : (
+          // Placeholder si pas d'image
+          <div
+            className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[9px] print:text-[8px] text-gray-400 italic"
+            style={{ width: "160px", height: "70px" }}
+          >
+            Cachet &amp; Signature
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function InvoiceDetailOrEditPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -139,6 +300,7 @@ export default function InvoiceDetailOrEditPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [toast, setToast] = useState(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [invoice, setInvoice] = useState(null);
   const [company, setCompany] = useState({});
   const [customers, setCustomers] = useState([]);
@@ -231,6 +393,7 @@ export default function InvoiceDetailOrEditPage() {
         clientNif: selectedCustomer?.taxId || selectedCustomer?.nif || "",
         taxId: selectedCustomer?.taxId || "",
         clientAddress: selectedCustomer?.address || "", clientPhone: selectedCustomer?.phone || "",
+        clientEmail: selectedCustomer?.email || "",
         date: invoiceDate, items, mainOeuvre: Number(mainOeuvre), remise: montantRemise,
         totalAchat, totalHorsTaxe, tvaAmount, tvaRate: Number(tvaRate), totalTtc,
         hasTva: applyTva, applyRsps, rspsRate: Number(rspsRate), rspsAmount, netAPayer, printOption,
@@ -258,21 +421,30 @@ export default function InvoiceDetailOrEditPage() {
     }
   };
 
+  const docLabel = invoice?.type === "PROFORMA" ? "Proforma" : "Facture";
+  const pdfFilename = `${docLabel}_${invoice?.number || ""}.pdf`;
+
+  const pdfOptions = useMemo(() => ({
+    margin: 0, filename: pdfFilename,
+    image: { type: "jpeg", quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+  }), [pdfFilename]);
+
+  const getPdfBlob = useCallback(async () => {
+    const element = document.getElementById("invoice-printable-container");
+    if (typeof window === "undefined" || !window.html2pdf || !element) return null;
+    return await window.html2pdf().set(pdfOptions).from(element).outputPdf("blob");
+  }, [pdfOptions]);
+
   const handlePrint = async () => {
     const originalTitle = document.title;
-    const docName = invoice.type === "PROFORMA" ? "Proforma" : "Facture";
-    document.title = `${docName}_${invoice.number}_${invoice.clientName || "Client"}`;
+    document.title = `${docLabel}_${invoice.number}_${invoice.clientName || "Client"}`;
     try {
       const element = document.getElementById("invoice-printable-container");
       if (typeof window !== "undefined" && window.html2pdf && element) {
         setIsGeneratingPdf(true);
-        const opt = {
-          margin: 0, filename: `${docName}_${invoice.number}.pdf`,
-          image: { type: "jpeg", quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
-        };
-        await window.html2pdf().from(element).set(opt).save();
+        await window.html2pdf().from(element).set(pdfOptions).save();
         setIsGeneratingPdf(false);
       } else { window.print(); }
     } catch (error) {
@@ -283,6 +455,11 @@ export default function InvoiceDetailOrEditPage() {
     } finally { setTimeout(() => { document.title = originalTitle; }, 1000); }
   };
 
+  const handleOpenShare = () => {
+    if (isEditing) { showToast("Enregistrez vos modifications avant de partager.", "error"); return; }
+    setShowShare(true);
+  };
+
   if (isLoading) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="animate-spin h-12 w-12 border-t-2 border-blue-600 rounded-full"></div>
@@ -291,68 +468,42 @@ export default function InvoiceDetailOrEditPage() {
   if (!invoice) return null;
 
   const brandColor = company.primaryColor || "#2563eb";
+  // 🆕 Récupération de l'image cachet+signature
+  const stampSignatureUrl = company.stampSignatureUrl || "";
   const montantArrete = applyRsps ? netAPayer : totalTtc;
   const currentStatusBadge = getStatusBadge(invoice.status);
   const isProforma = invoice.type === "PROFORMA";
   const invoicePaidOrPartial = isPaidOrPartial(invoice.status);
   const activePrintOption = printOption || invoice.printOption || "1";
 
-  const logoContainerStyle = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    height: "210px",
-    width: "100%",
-    overflow: "hidden",
-    flexShrink: 0,
-  };
-
-  const logoImgStyle = {
-    height: "210px",
-    width: "auto",
-    maxWidth: "420px",
-    objectFit: "contain",
-    display: "block",
-    flexShrink: 0,
-  };
-
-  const logoImgStyleOpt2 = {
-    height: "110px",
-    width: "auto",
-    maxWidth: "220px",
-    objectFit: "contain",
-    display: "block",
-    flexShrink: 0,
-  };
+  const shareSubject = `${docLabel} N° ${invoice.number} - ${company.companyName || ""}`.trim();
+  const shareMessage =
+    `Bonjour ${invoice.clientName || "cher client"},\n\n` +
+    `Veuillez trouver ci-joint la ${docLabel.toLowerCase()} N° ${invoice.number} ` +
+    `d'un montant de ${montantArrete.toLocaleString("fr-FR")} F CFA, datée du ${invoice.date ? new Date(invoice.date).toLocaleDateString("fr-FR") : ""}.\n\n` +
+    `Cordialement,\n${company.companyName || ""}${company.phone ? `\n${company.phone}` : ""}`;
 
   const watermarkStyle = {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    pointerEvents: "none",
-    opacity: 0.08,
-    userSelect: "none",
-    zIndex: 0,
+    position: "absolute", inset: 0, display: "flex",
+    alignItems: "center", justifyContent: "center",
+    pointerEvents: "none", opacity: 0.08, userSelect: "none", zIndex: 0,
   };
+  const watermarkImgStyle = { width: "60%", maxWidth: "320px", objectFit: "contain", filter: "grayscale(100%)" };
 
-  const watermarkImgStyle = {
-    width: "60%",
-    maxWidth: "320px",
-    objectFit: "contain",
-    filter: "grayscale(100%)",
-  };
+  // Infos paiement pour le bloc signature
+  const paymentInfoNode = invoicePaidOrPartial && normalizeStatus(invoice.status) === STATUS.PAID ? (
+    <p className="border border-green-500 text-green-700 px-2 py-1 rounded inline-block font-bold text-[9px] print:text-[8px]">
+      ✓ Réglé par {invoice.paymentMethod || "Espèces"} le{" "}
+      {invoice.paymentDate ? new Date(invoice.paymentDate).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR")}
+    </p>
+  ) : null;
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans text-gray-900 pb-16">
       <style>{`
         :root { color-scheme: light; }
         * { color-adjust: exact; }
-        @keyframes toastIn {
-          from { transform: translateY(12px) scale(0.98); opacity: 0; }
-          to { transform: translateY(0) scale(1); opacity: 1; }
-        }
+        @keyframes toastIn { from { transform: translateY(12px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
         .animate-toast-in { animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
         .animate-toast-progress { animation: toastProgress ${TOAST_DURATION}ms linear forwards; }
@@ -360,68 +511,26 @@ export default function InvoiceDetailOrEditPage() {
         @media print {
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           @page { size: A4 portrait; margin: 0 !important; }
-          html, body {
-            width: 210mm !important; height: 297mm !important;
-            margin: 0 !important; padding: 0 !important;
-            background: #ffffff !important; overflow: hidden !important;
-          }
+          html, body { width: 210mm !important; height: 297mm !important; margin: 0 !important; padding: 0 !important; background: #ffffff !important; overflow: hidden !important; }
           .print-hidden { display: none !important; }
-          
           #invoice-printable-container {
-            width: 210mm !important; 
-            height: 297mm !important;
-            max-height: 297mm !important; 
-            overflow: hidden !important;
-            box-sizing: border-box !important;
-            padding: 6mm 12mm 4mm 12mm !important;
-            margin: 0 !important; 
-            border-radius: 0 !important;
-            border: none !important; 
-            box-shadow: none !important;
+            width: 210mm !important; height: 297mm !important; max-height: 297mm !important;
+            overflow: hidden !important; box-sizing: border-box !important;
+            padding: 2mm 12mm 4mm 12mm !important; margin: 0 !important;
+            border-radius: 0 !important; border: none !important; box-shadow: none !important;
           }
+          .invoice-content { position: relative !important; }
+          .header-grid-option1 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 14px !important; border-bottom: 1px solid #1f2937 !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; align-items: center !important; }
+          .header-option2 { display: flex !important; flex-direction: row !important; justify-content: space-between !important; align-items: center !important; border-bottom: 2px solid ${brandColor} !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; gap: 12px !important; flex-wrap: wrap !important; }
+          .invoice-signature-wrapper { min-height: 94mm !important; display: flex !important; flex-direction: column !important; justify-content: flex-end !important; }
+          .invoice-signature { margin-bottom: 3mm !important; }
+          .invoice-footer { margin-top: 0 !important; padding-bottom: 1mm !important; }
+          .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
+          .logo-img-option1 { height: 210px !important; width: auto !important; max-width: 420px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
+          .logo-img-option2 { height: 110px !important; width: auto !important; max-width: 220px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
           
-          .invoice-content { 
-            position: relative !important;
-          }
-          
-          /* ✅ SIGNATURE - hauteur min 85mm pour footer visible avec plus d'espace */
-          .invoice-signature-wrapper { 
-            min-height: 85mm !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: flex-end !important;
-          }
-          
-          .invoice-signature { 
-            margin-bottom: 3mm !important;
-          }
-          
-          .invoice-footer { 
-            margin-top: 0 !important;
-            padding-bottom: 1mm !important;
-          }
-
-          .logo-print-container {
-            height: 210px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            overflow: hidden !important;
-          }
-          .logo-print-img {
-            height: 210px !important;
-            width: auto !important;
-            max-width: 420px !important;
-            object-fit: contain !important;
-            display: block !important;
-          }
-          .logo-print-img-opt2 {
-            height: 100px !important;
-            width: auto !important;
-            max-width: 200px !important;
-            object-fit: contain !important;
-            display: block !important;
-          }
+          /* 🆕 Impression cachet+signature */
+          .stamp-signature-img { max-width: 160px !important; max-height: 80px !important; object-fit: contain !important; display: block !important; }
         }
       `}</style>
 
@@ -429,15 +538,9 @@ export default function InvoiceDetailOrEditPage() {
 
       <header className="print-hidden min-h-[5rem] bg-white border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between p-4 md:px-8 sticky top-0 z-10 shadow-sm gap-4">
         <div className="flex flex-wrap items-center gap-2 md:gap-4">
-          <Link href="/factures" className="px-3 py-2 md:py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">
-            &larr; <span className="hidden sm:inline">Retour</span>
-          </Link>
-          <h1 className="text-lg md:text-xl font-bold truncate max-w-[200px] sm:max-w-xs">
-            {isProforma ? "Proforma" : "Facture"} {invoice.number}
-          </h1>
-          <span className={`px-2 py-1 md:px-3 md:py-1 rounded-full text-[10px] md:text-xs font-bold whitespace-nowrap ${currentStatusBadge.style}`}>
-            {currentStatusBadge.label}
-          </span>
+          <Link href="/factures" className="px-3 py-2 md:py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">&larr; <span className="hidden sm:inline">Retour</span></Link>
+          <h1 className="text-lg md:text-xl font-bold truncate max-w-[200px] sm:max-w-xs">{isProforma ? "Proforma" : "Facture"} {invoice.number}</h1>
+          <span className={`px-2 py-1 md:px-3 md:py-1 rounded-full text-[10px] md:text-xs font-bold whitespace-nowrap ${currentStatusBadge.style}`}>{currentStatusBadge.label}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto">
           {!isEditing ? (
@@ -446,6 +549,9 @@ export default function InvoiceDetailOrEditPage() {
               <button onClick={handlePrint} disabled={isGeneratingPdf} className="flex-1 md:flex-none px-3 md:px-4 py-2 text-white rounded-xl text-sm font-medium shadow-md flex items-center justify-center gap-2 disabled:opacity-60" style={{ backgroundColor: brandColor }}>
                 {isGeneratingPdf && <span className="inline-block h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
                 {isGeneratingPdf ? "Génération..." : "PDF / Imprimer"}
+              </button>
+              <button onClick={handleOpenShare} className="flex-1 md:flex-none px-3 md:px-4 py-2 rounded-xl text-sm font-medium bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 flex items-center justify-center gap-1.5">
+                📤 <span>Partager</span>
               </button>
               {!confirmingDelete ? (
                 <button onClick={() => setConfirmingDelete(true)} className="flex-1 md:flex-none px-3 py-2 text-sm font-medium rounded-xl text-red-600 hover:bg-red-50">Supprimer</button>
@@ -479,7 +585,6 @@ export default function InvoiceDetailOrEditPage() {
       >
         {!isEditing ? (
           <>
-            {/* CONTENU */}
             <div className="invoice-content relative bg-white">
               {company.logoUrl && (
                 <div style={watermarkStyle}>
@@ -488,15 +593,10 @@ export default function InvoiceDetailOrEditPage() {
               )}
 
               {activePrintOption === "2" ? (
-                <div style={{
-                  display: "flex", flexDirection: "row", justifyContent: "space-between",
-                  alignItems: "center", borderBottom: `2px solid ${brandColor}`,
-                  paddingBottom: "8px", marginBottom: "8px",
-                  position: "relative", zIndex: 10, gap: "12px", flexWrap: "wrap",
-                }}>
+                <div className="header-option2" style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${brandColor}`, paddingBottom: "8px", marginBottom: "8px", position: "relative", zIndex: 10, gap: "12px", flexWrap: "wrap" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                     {company.logoUrl && (
-                      <img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-print-img-opt2" style={logoImgStyleOpt2} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                      <img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option2" style={{ height: "110px", width: "auto", maxWidth: "220px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
                     )}
                     <div>
                       <p style={{ fontSize: "14px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: 0 }}>{company.companyName || "SOCIÉTÉ"}</p>
@@ -510,10 +610,10 @@ export default function InvoiceDetailOrEditPage() {
                   </div>
                 </div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", borderBottom: "1px solid #1f2937", paddingBottom: "8px", position: "relative", zIndex: 10, alignItems: "center" }}>
-                  <div className="logo-print-container" style={logoContainerStyle}>
+                <div className="header-grid-option1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", borderBottom: "1px solid #1f2937", paddingBottom: "8px", marginBottom: "0", position: "relative", zIndex: 10, alignItems: "center" }}>
+                  <div className="logo-container-option1" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "210px", width: "100%", overflow: "hidden", flexShrink: 0 }}>
                     {company.logoUrl ? (
-                      <img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-print-img" style={logoImgStyle} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                      <img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option1" style={{ height: "210px", width: "auto", maxWidth: "420px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
                     ) : (
                       <span style={{ fontSize: "22px", fontWeight: "900", color: "#1f2937", letterSpacing: "0.05em" }}>{company.companyName || "LOGO"}</span>
                     )}
@@ -538,7 +638,7 @@ export default function InvoiceDetailOrEditPage() {
                 <div className="w-[300px] max-w-full border border-gray-300 bg-gray-100 p-2 text-[11px] print:text-[10px] space-y-0.5 rounded-lg shadow-sm">
                   <p className="font-bold text-gray-900">DOIT : {invoice.clientName}</p>
                   <p className="text-gray-700">NIF : {clientNifDisplay}</p>
-                  <p className="text-gray-700">Adresse : {invoice.clientAddress || currentCustomer?.address || "Zone franche"}</p>
+                  <p className="text-gray-700">Adresse : {invoice.clientAddress || currentCustomer?.address || "N/A"}</p>
                   <p className="text-gray-700">Tel : {invoice.clientPhone || currentCustomer?.phone || "---"}</p>
                 </div>
               </div>
@@ -614,29 +714,16 @@ export default function InvoiceDetailOrEditPage() {
               </div>
             </div>
 
-            {/* ✅ WRAPPER SIGNATURE + FOOTER avec min-height 85mm */}
+            {/* WRAPPER SIGNATURE + FOOTER */}
             <div className="invoice-signature-wrapper">
-              {/* SIGNATURE */}
               <div className="invoice-signature mt-4 print:mt-0">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 print:gap-4">
-                  <div className="text-[9px] print:text-[8px] text-gray-500">
-                    {invoicePaidOrPartial && normalizeStatus(invoice.status) === STATUS.PAID && (
-                      <p className="border border-green-500 text-green-700 px-2 py-1 rounded inline-block font-bold text-[9px] print:text-[8px]">
-                        ✓ Réglé par {invoice.paymentMethod || "Espèces"} le{" "}
-                        {invoice.paymentDate ? new Date(invoice.paymentDate).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR")}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-center">
-                    <p className="font-bold text-[11px] print:text-[10px] underline mb-2">LE RESPONSABLE</p>
-                    <div className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[9px] print:text-[8px] text-gray-400 italic" style={{ width: "160px", height: "70px" }}>
-                      Cachet &amp; Signature
-                    </div>
-                  </div>
-                </div>
+                {/* 🆕 Utilisation du composant SignatureBlock */}
+                <SignatureBlock
+                  stampSignatureUrl={stampSignatureUrl}
+                  paymentInfo={paymentInfoNode}
+                />
               </div>
 
-              {/* FOOTER */}
               <div className="invoice-footer mt-4 print:mt-0">
                 <div className="w-full border-t-2 pt-1.5 print:pt-1 text-[9px] print:text-[8px] text-center text-gray-600 bg-white" style={{ borderColor: brandColor }}>
                   <p className="font-bold text-gray-900 text-[10px] print:text-[9px] mb-0.5">{company.companyName}</p>
@@ -769,6 +856,18 @@ export default function InvoiceDetailOrEditPage() {
           </form>
         )}
       </main>
+
+      <ShareModal
+        open={showShare}
+        onClose={() => setShowShare(false)}
+        defaultPhone={invoice.clientPhone || currentCustomer?.phone || ""}
+        defaultEmail={invoice.clientEmail || currentCustomer?.email || ""}
+        defaultMessage={shareMessage}
+        subject={shareSubject}
+        filename={pdfFilename}
+        getPdfBlob={getPdfBlob}
+        showToast={showToast}
+      />
     </div>
   );
 }

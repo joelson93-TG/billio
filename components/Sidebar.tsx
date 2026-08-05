@@ -1,11 +1,28 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/firebase"; // Ajustez ce chemin selon votre projet
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
 
+  // Vérification de l'administrateur à la connexion
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && user.email === "admin@jblessconsulting.com") {
+        setIsAdmin(true);
+      } else {
+        setIsAdmin(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Liste des menus avec "Centre d'aide" à la toute fin
   const navItems = [
     {
       name: "Tableau de bord",
@@ -48,6 +65,16 @@ export default function Sidebar() {
         </svg>
       ),
     },
+    {
+      name: "Centre d'aide",
+      fullName: "Centre d'aide",
+      href: "/centre-d-aide",
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    },
   ];
 
   return (
@@ -63,17 +90,21 @@ export default function Sidebar() {
     >
       
       {/* Logo & Marque */}
-      <div className="flex items-center gap-2.5 shrink-0 md:h-16 md:px-6 md:border-b md:border-slate-800 md:w-full">
+      <div className="flex items-center gap-2.5 shrink-0 md:h-16 md:px-6 md:border-b md:border-slate-800 md:w-full mr-2 md:mr-0">
         <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-sm shadow-sm">
           B
         </div>
-        <span className="text-base sm:text-lg font-bold text-white tracking-tight">Billio.</span>
+        <span className="text-base sm:text-lg font-bold text-white tracking-tight hidden sm:block md:block">Billio.</span>
       </div>
       
       {/* Menu principal */}
-      <nav aria-label="Menu principal" className="flex-1 flex items-center justify-end md:flex-col md:justify-start md:items-stretch md:w-full md:overflow-y-auto">
+      <nav 
+        aria-label="Menu principal" 
+        className="flex-1 flex items-center md:flex-col md:justify-start md:items-stretch md:w-full 
+                   overflow-x-auto md:overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+      >
         <ul className="flex flex-row items-center space-x-1 sm:space-x-2 
-                       md:flex-col md:justify-start md:space-x-0 md:space-y-1.5 md:px-3 md:py-6 md:w-full">
+                       md:flex-col md:justify-start md:space-x-0 md:space-y-1.5 md:px-3 md:py-6 md:w-full min-w-max md:min-w-0">
           {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
             
@@ -86,15 +117,15 @@ export default function Sidebar() {
                   className={`flex items-center justify-center p-2.5 rounded-xl transition-all duration-200 group
                              md:flex-row md:justify-start md:gap-3 md:px-4 md:py-3 md:text-sm md:font-medium
                              ${isActive
-                               ? "text-blue-400 bg-blue-500/10 md:bg-blue-600 md:text-white md:shadow-md md:shadow-blue-600/20"
-                               : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 md:hover:text-white md:hover:bg-slate-800"
+                                ? "text-blue-400 bg-blue-500/10 md:bg-blue-600 md:text-white md:shadow-md md:shadow-blue-600/20"
+                                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 md:hover:text-white md:hover:bg-slate-800"
                              }`}
                 >
                   <span className={`transition-transform duration-200 ${isActive ? "scale-110 md:scale-100" : "group-hover:scale-110 md:group-hover:scale-100"}`}>
                     {item.icon}
                   </span>
                   
-                  {/* Libellé */}
+                  {/* Libellé (Masqué sur mobile, visible sur desktop) */}
                   <span className="hidden md:inline text-sm font-medium leading-tight truncate">
                     {item.fullName || item.name}
                   </span>
@@ -105,8 +136,29 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      {/* Bouton Déconnexion en rouge vif */}
-      <div className="flex shrink-0 ml-1 md:ml-0 md:p-4 md:border-t md:border-slate-800 md:w-full">
+      {/* Section Bas : Admin (si autorisé) + Déconnexion */}
+      <div className="flex items-center shrink-0 ml-1 md:ml-0 md:p-4 md:border-t md:border-slate-800 md:w-full md:flex-col md:gap-2 md:items-stretch">
+        
+        {/* Bouton Admin (Conditionnel) */}
+        {isAdmin && (
+          <Link 
+            href="/admin" 
+            title="Espace Administrateur"
+            className="flex items-center justify-center p-2.5 rounded-xl transition-all duration-200 group mr-1 md:mr-0
+                       md:flex-row md:justify-start md:gap-3 md:px-4 md:py-3 md:text-sm md:font-bold
+                       text-indigo-400 bg-indigo-500/10 hover:text-white hover:bg-indigo-600
+                       md:bg-gradient-to-r md:from-indigo-600 md:to-blue-600 md:text-white md:shadow-md md:hover:from-indigo-500 md:hover:to-blue-500"
+          >
+            <svg className="w-5 h-5 shrink-0 transition-transform duration-200 group-hover:scale-110 md:group-hover:scale-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            <span className="hidden md:inline leading-tight truncate text-left">
+              Admin
+            </span>
+          </Link>
+        )}
+
+        {/* Bouton Déconnexion en rouge vif */}
         <Link 
           href="/login" 
           title="Déconnexion"
@@ -117,10 +169,11 @@ export default function Sidebar() {
           <svg className="w-5 h-5 text-red-500 group-hover:text-red-400 group-hover:scale-110 md:group-hover:scale-100 transition-all duration-200 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
-          <span className="hidden md:inline text-sm font-medium leading-tight truncate text-left">
+          <span className="hidden md:inline leading-tight truncate text-left">
             Déconnexion
           </span>
         </Link>
+
       </div>
     </aside>
   );

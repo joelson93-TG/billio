@@ -6,19 +6,12 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/firebase";
 
-// Fonction pour calculer dynamiquement les jours restants
 const getDaysRemaining = (endDateString) => {
   if (!endDateString) return 0;
-  
   const endDate = new Date(endDateString);
   const today = new Date();
-  
-  // Calcul de la différence en millisecondes
   const diffTime = endDate.getTime() - today.getTime();
-  
-  // Conversion en jours (arrondi au supérieur)
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
   return diffDays > 0 ? diffDays : 0;
 };
 
@@ -27,15 +20,15 @@ export default function SettingsPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingStamp, setIsUploadingStamp] = useState(false);
 
-  // État pour les tarifs dynamiques chargés depuis Firestore
   const [pricing, setPricing] = useState({
     monthly: 5000,
     sixMonths: 25000,
     yearly: 50000,
   });
 
-  // Champs de configuration de la société
+  // Champs de configuration
   const [companyName, setCompanyName] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [website, setWebsite] = useState("");
@@ -48,13 +41,14 @@ export default function SettingsPage() {
   const [cnss, setCnss] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#2563eb");
 
-  // Infos abonnement avec gestion de la date d'expiration
+  // 🆕 UNE SEULE IMAGE : Cachet + Signature combinés
+  const [stampSignatureUrl, setStampSignatureUrl] = useState("");
+
   const [subscription, setSubscription] = useState({
     status: "trial",
     endDate: null,
   });
 
-  // Construction des plans dynamiques basés sur les données de l'admin
   const plans = [
     {
       id: "1month",
@@ -80,7 +74,6 @@ export default function SettingsPage() {
   ];
 
   useEffect(() => {
-    // 1. Écoute en temps réel des tarifs configurés dans l'admin (Firestore: config/pricing)
     const pricingRef = doc(db, "config", "pricing");
     const unsubscribePricing = onSnapshot(pricingRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -93,7 +86,6 @@ export default function SettingsPage() {
       }
     });
 
-    // 2. Injection du script FedaPay
     if (!document.getElementById("fedapay-checkout-script")) {
       const script = document.createElement("script");
       script.id = "fedapay-checkout-script";
@@ -104,7 +96,6 @@ export default function SettingsPage() {
 
     let unsubscribeUser = () => {};
 
-    // 3. Gestion de l'authentification et récupération des données utilisateur
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         router.push("/login");
@@ -128,27 +119,20 @@ export default function SettingsPage() {
           setRccm(data.rccm || "");
           setCnss(data.cnss || "");
           setPrimaryColor(data.primaryColor || "#2563eb");
+          // 🆕 Charger l'image cachet+signature
+          setStampSignatureUrl(data.stampSignatureUrl || "");
         }
 
-        // 4. Écoute en temps réel du statut d'abonnement de l'utilisateur
         const userDocRef = doc(db, "users", user.uid);
         unsubscribeUser = onSnapshot(userDocRef, (userSnap) => {
-          console.log("--- DEBUG FIREBASE ---");
-          console.log("UID connecté :", user.uid);
-          
           if (userSnap.exists()) {
             const userData = userSnap.data();
-            console.log("Données trouvées dans Firestore :", userData);
-            
             const endDate = userData.trialEndDate || userData.endDate || null;
-            const status = userData.subscriptionStatus || (userData.subscription?.status) || "trial";
-
-            setSubscription({
-              status,
-              endDate,
-            });
-          } else {
-            console.log("⚠️ Aucun document trouvé dans Firestore pour cet UID !");
+            const status =
+              userData.subscriptionStatus ||
+              userData.subscription?.status ||
+              "trial";
+            setSubscription({ status, endDate });
           }
         });
       } catch (error) {
@@ -165,29 +149,29 @@ export default function SettingsPage() {
     };
   }, [router]);
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files?.[0];
+  // Fonction générique de traitement d'image avec suppression de fond
+  const processImage = (file, callback, maxWidth = 400, maxHeight = 400, setUploading = null) => {
     if (!file) return;
+
+    if (setUploading) setUploading(true);
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const MAX_WIDTH = 400;
-        const MAX_HEIGHT = 400;
         let width = img.width;
         let height = img.height;
 
         if (width > height) {
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
           }
         } else {
-          if (height > MAX_HEIGHT) {
-            width = Math.round((width * MAX_HEIGHT) / height);
-            height = MAX_HEIGHT;
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
           }
         }
 
@@ -198,6 +182,7 @@ export default function SettingsPage() {
         ctx.clearRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 
+        // Suppression du fond clair (blanc, beige, gris clair)
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
         const bgR = data[0];
@@ -215,11 +200,24 @@ export default function SettingsPage() {
           }
         }
         ctx.putImageData(imageData, 0, 0);
-        setLogoUrl(canvas.toDataURL("image/png"));
+        callback(canvas.toDataURL("image/png"));
+        if (setUploading) setUploading(false);
       };
       img.src = event.target.result;
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    processImage(file, setLogoUrl, 400, 400);
+  };
+
+  // 🆕 Handler unique pour cachet + signature
+  const handleStampSignatureUpload = (e) => {
+    const file = e.target.files?.[0];
+    // Dimensions larges pour bien contenir la signature + cachet ensemble
+    processImage(file, setStampSignatureUrl, 500, 300, setIsUploadingStamp);
   };
 
   const handleSave = async (e) => {
@@ -227,9 +225,25 @@ export default function SettingsPage() {
     setIsSaving(true);
     try {
       const docRef = doc(db, "users", currentUser.uid, "settings", "company");
-      await setDoc(docRef, {
-        companyName, logoUrl, website, services, address, phone, email, nif, rccm, cnss, primaryColor
-      }, { merge: true });
+      await setDoc(
+        docRef,
+        {
+          companyName,
+          logoUrl,
+          website,
+          services,
+          address,
+          phone,
+          email,
+          nif,
+          rccm,
+          cnss,
+          primaryColor,
+          // 🆕 Sauvegarder l'image cachet+signature
+          stampSignatureUrl,
+        },
+        { merge: true }
+      );
       alert("Paramètres enregistrés avec succès !");
     } catch (error) {
       console.error("Erreur enregistrement :", error);
@@ -241,7 +255,9 @@ export default function SettingsPage() {
 
   const handlePaymentClick = (plan) => {
     if (typeof window === "undefined" || !window.FedaPay) {
-      alert("Le module de paiement est en cours de chargement. Veuillez patienter quelques secondes et réessayer.");
+      alert(
+        "Le module de paiement est en cours de chargement. Veuillez patienter quelques secondes et réessayer."
+      );
       return;
     }
 
@@ -254,61 +270,60 @@ export default function SettingsPage() {
           custom_metadata: {
             userId: currentUser.uid,
             planId: plan.id,
-            months: plan.months
-          }
+            months: plan.months,
+          },
         },
         customer: {
           email: email || currentUser?.email || "client@jblessconsulting.com",
           firstname: companyName || "Client",
         },
         onComplete: async (response) => {
-          console.log("Retour de FedaPay :", response);
+          if (response.reason !== "checkout_completed") return;
 
-          // Si l'utilisateur a annulé ou fermé la fenêtre sans finaliser le paiement
-          if (response.reason !== 'checkout_completed') {
-            console.log("L'utilisateur a annulé ou fermé la fenêtre.");
-            return; 
-          }
-
-          if (response.transaction && response.transaction.status !== 'approved') {
+          if (
+            response.transaction &&
+            response.transaction.status !== "approved"
+          ) {
             alert("Le paiement a échoué ou a été refusé par la banque.");
             return;
           }
 
-          // 1. CUMUL DE L'ABONNEMENT
           const now = new Date();
-          const currentEndDate = subscription.endDate ? new Date(subscription.endDate) : now;
-          
-          const baseDate = (currentEndDate > now) ? currentEndDate : now;
-
+          const currentEndDate = subscription.endDate
+            ? new Date(subscription.endDate)
+            : now;
+          const baseDate = currentEndDate > now ? currentEndDate : now;
           const newEndDate = new Date(baseDate);
           newEndDate.setMonth(newEndDate.getMonth() + plan.months);
 
           try {
-            // 2. Mise à jour automatique de la souscription dans Firestore
             const userDocRef = doc(db, "users", currentUser.uid);
-            await setDoc(userDocRef, {
-              subscriptionStatus: "active",
-              trialEndDate: newEndDate.toISOString(),
-              lastPaymentAmount: plan.price,
-              updatedAt: now.toISOString()
-            }, { merge: true });
-
-            alert(`Paiement validé avec succès ! Votre abonnement a été prolongé jusqu'au ${newEndDate.toLocaleDateString("fr-FR")}.`);
+            await setDoc(
+              userDocRef,
+              {
+                subscriptionStatus: "active",
+                trialEndDate: newEndDate.toISOString(),
+                lastPaymentAmount: plan.price,
+                updatedAt: now.toISOString(),
+              },
+              { merge: true }
+            );
+            alert(
+              `Paiement validé ! Abonnement prolongé jusqu'au ${newEndDate.toLocaleDateString("fr-FR")}.`
+            );
           } catch (firestoreError) {
-            console.error("Erreur lors de la mise à jour dans Firestore :", firestoreError);
-            alert("Paiement validé, mais une erreur s'est produite lors de la mise à jour de l'abonnement. Contactez le support.");
+            console.error("Erreur Firestore :", firestoreError);
+            alert(
+              "Paiement validé, mais erreur de mise à jour. Contactez le support."
+            );
           }
         },
-        onClose: () => {
-          console.log("Fenêtre de paiement fermée.");
-        }
+        onClose: () => console.log("Fenêtre de paiement fermée."),
       });
 
       handler.open();
-
     } catch (error) {
-      console.error("Erreur d'initialisation FedaPay :", error);
+      console.error("Erreur FedaPay :", error);
       alert("Une erreur est survenue lors du lancement du paiement.");
     }
   };
@@ -321,33 +336,54 @@ export default function SettingsPage() {
     );
   }
 
+  // Style damier pour fond transparent
+  const checkerboardStyle = {
+    backgroundImage: `linear-gradient(45deg, #e5e7eb 25%, transparent 25%), 
+                      linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), 
+                      linear-gradient(45deg, transparent 75%, #e5e7eb 75%), 
+                      linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)`,
+    backgroundSize: `12px 12px`,
+    backgroundPosition: `0 0, 0 6px, 6px -6px, -6px 0px`,
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-full font-sans text-gray-900 bg-gray-50/50">
       <main className="flex-1 flex flex-col">
         <header className="h-16 bg-white flex items-center justify-between px-8 border-b border-gray-100 shrink-0">
-          <h1 className="text-xl font-bold tracking-tight">Paramètres & Abonnement</h1>
+          <h1 className="text-xl font-bold tracking-tight">
+            Paramètres & Abonnement
+          </h1>
         </header>
 
         <div className="p-6 max-w-4xl mx-auto w-full pb-12 space-y-6">
-          
-          {/* SECTION ABONNEMENT */}
+
+          {/* ── SECTION ABONNEMENT ── */}
           <div className="bg-slate-900 text-white rounded-2xl p-6 shadow-lg">
             <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
               <div>
-                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider mb-1 ${subscription.status === "active" ? "bg-green-500/20 text-green-400" : "bg-blue-500/20 text-blue-400"}`}>
-                  {subscription.status === "active" ? "Abonné" : "Essai gratuit"}
+                <span
+                  className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider mb-1 ${
+                    subscription.status === "active"
+                      ? "bg-green-500/20 text-green-400"
+                      : "bg-blue-500/20 text-blue-400"
+                  }`}
+                >
+                  {subscription.status === "active"
+                    ? "Abonné"
+                    : "Essai gratuit"}
                 </span>
                 <h2 className="text-base font-bold">Mon Espace Billio</h2>
               </div>
               <p className="text-xs text-slate-400">
-                {subscription.endDate 
-                  ? `${getDaysRemaining(subscription.endDate)} jours restants` 
+                {subscription.endDate
+                  ? `${getDaysRemaining(subscription.endDate)} jours restants`
                   : "30 jours restants"}
               </p>
             </div>
 
             <p className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
-              Cliquez sur la formule de votre choix pour régler instantanément :
+              Cliquez sur la formule de votre choix pour régler
+              instantanément :
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -358,46 +394,67 @@ export default function SettingsPage() {
                   className="relative bg-slate-800/90 hover:bg-slate-800 rounded-xl p-4 border border-slate-700 hover:border-blue-500 transition-all cursor-pointer flex flex-col justify-between group shadow-sm hover:shadow-md"
                 >
                   {plan.badge && (
-                    <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 text-[9px] font-bold rounded-full tracking-wider shadow-sm ${plan.badge.color}`}>
+                    <span
+                      className={`absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 text-[9px] font-bold rounded-full tracking-wider shadow-sm ${plan.badge.color}`}
+                    >
                       {plan.badge.text}
                     </span>
                   )}
                   <div>
-                    <h4 className="text-[11px] font-bold text-slate-400 tracking-wider mb-1 mt-0.5">{plan.duration}</h4>
+                    <h4 className="text-[11px] font-bold text-slate-400 tracking-wider mb-1 mt-0.5">
+                      {plan.duration}
+                    </h4>
                     <div className="text-xl font-black text-white mb-0.5 group-hover:text-blue-400 transition-colors">
-                      {plan.price.toLocaleString()} <span className="text-xs font-bold text-blue-400">F</span>
+                      {plan.price.toLocaleString()}{" "}
+                      <span className="text-xs font-bold text-blue-400">F</span>
                     </div>
                     <p className="text-[10px] text-slate-400">
-                      {Math.round(plan.price / plan.months).toLocaleString()} F / mois
+                      {Math.round(plan.price / plan.months).toLocaleString()} F
+                      / mois
                     </p>
                   </div>
                   <div className="mt-3 pt-2 border-t border-slate-700/60 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-blue-400 group-hover:underline">Payer maintenant →</span>
+                    <span className="text-[11px] font-bold text-blue-400 group-hover:underline">
+                      Payer maintenant →
+                    </span>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* SECTION PARAMÈTRES DE LA SOCIÉTÉ */}
-          <form onSubmit={handleSave} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
-            <h2 className="text-base font-bold tracking-tight text-slate-900 pb-2 border-b border-gray-100">Informations de l'entreprise</h2>
-            
+          {/* ── SECTION PARAMÈTRES ── */}
+          <form
+            onSubmit={handleSave}
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5"
+          >
+            <h2 className="text-base font-bold tracking-tight text-slate-900 pb-2 border-b border-gray-100">
+              Informations de l'entreprise
+            </h2>
+
+            {/* ── LOGO ── */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">Logo (Fond transparent automatique)</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                Logo{" "}
+                <span className="font-normal text-gray-500">
+                  (Fond transparent automatique)
+                </span>
+              </label>
               <div className="flex flex-col sm:flex-row items-center gap-4 p-3 border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
-                <div 
-                  className="w-20 h-20 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden shrink-0 relative"
-                  style={{
-                    backgroundImage: `linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)`,
-                    backgroundSize: `12px 12px`,
-                    backgroundPosition: `0 0, 0 6px, 6px -6px, -6px 0px`
-                  }}
+                <div
+                  className="w-20 h-20 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden shrink-0"
+                  style={checkerboardStyle}
                 >
                   {logoUrl ? (
-                    <img src={logoUrl} alt="Logo" className="max-w-full max-h-full object-contain p-1" />
+                    <img
+                      src={logoUrl}
+                      alt="Logo"
+                      className="max-w-full max-h-full object-contain p-1"
+                    />
                   ) : (
-                    <span className="text-[10px] text-gray-400 text-center">Aucun logo</span>
+                    <span className="text-[10px] text-gray-400 text-center">
+                      Aucun logo
+                    </span>
                   )}
                 </div>
 
@@ -405,79 +462,300 @@ export default function SettingsPage() {
                   <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
                     <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 font-semibold rounded-lg hover:bg-blue-100 text-xs">
                       Importer un logo
-                      <input type="file" accept="image/png, image/jpeg, image/webp" onChange={handleImageUpload} className="hidden" />
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/webp"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
                     </label>
                     {logoUrl && (
-                      <button type="button" onClick={() => setLogoUrl("")} className="px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg font-medium">
+                      <button
+                        type="button"
+                        onClick={() => setLogoUrl("")}
+                        className="px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg font-medium"
+                      >
                         Supprimer
                       </button>
                     )}
                   </div>
+                  <p className="text-[10px] text-gray-400">
+                    PNG, JPG ou WEBP — Le fond blanc sera automatiquement supprimé
+                  </p>
                 </div>
               </div>
             </div>
 
+            {/* ── 🆕 CACHET & SIGNATURE (image unique) ── */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                Cachet & Signature{" "}
+                <span className="font-normal text-gray-500">
+                  (image unique scannée — apparaîtra sous "LE RESPONSABLE" sur
+                  vos factures)
+                </span>
+              </label>
+
+              <div className="flex flex-col sm:flex-row items-center gap-4 p-4 border border-dashed border-indigo-200 rounded-xl bg-indigo-50/30">
+                {/* Aperçu */}
+                <div
+                  className="w-full sm:w-64 h-28 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden shrink-0 relative"
+                  style={checkerboardStyle}
+                >
+                  {isUploadingStamp ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-indigo-500"></div>
+                      <span className="text-[10px] text-gray-400">
+                        Traitement...
+                      </span>
+                    </div>
+                  ) : stampSignatureUrl ? (
+                    <img
+                      src={stampSignatureUrl}
+                      alt="Cachet & Signature"
+                      className="max-w-full max-h-full object-contain p-1"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-1 px-4 text-center">
+                      <span className="text-2xl">🖊️</span>
+                      <span className="text-[10px] text-gray-400 leading-tight">
+                        Aucune image importée
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Contrôles */}
+                <div className="flex-1 space-y-2 text-center sm:text-left">
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    Scannez ou photographiez votre cachet avec votre signature
+                    dessus (comme sur un document officiel), puis importez
+                    l'image ici. Le fond sera automatiquement rendu transparent.
+                  </p>
+
+                  <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 font-semibold rounded-lg hover:bg-indigo-100 text-xs border border-indigo-200">
+                      🖊️ Importer Cachet & Signature
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/webp"
+                        onChange={handleStampSignatureUpload}
+                        className="hidden"
+                        disabled={isUploadingStamp}
+                      />
+                    </label>
+                    {stampSignatureUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setStampSignatureUrl("")}
+                        className="px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg font-medium"
+                      >
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="text-[10px] text-gray-400">
+                    PNG, JPG ou WEBP — Le fond sera automatiquement supprimé
+                  </p>
+                </div>
+              </div>
+
+              {/* Aperçu dans le contexte d'une facture */}
+              {stampSignatureUrl && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Aperçu sur facture
+                  </p>
+                  <div className="flex justify-end">
+                    <div className="text-right">
+                      <p className="text-xs font-bold underline text-gray-700 mb-2">
+                        LE RESPONSABLE
+                      </p>
+                      <div className="w-36 h-20 relative">
+                        <img
+                          src={stampSignatureUrl}
+                          alt="Aperçu"
+                          className="max-w-full max-h-full object-contain"
+                        />
+                      </div>
+                      <p className="text-[9px] text-gray-400 italic mt-1">
+                        Cachet & Signature
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── NOM + SITE WEB ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Nom de l'entreprise</label>
-                <input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none" required />
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Nom de l'entreprise{" "}
+                  <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none focus:border-blue-400 focus:bg-white transition-colors"
+                  placeholder="Ex : CABINET JBLESS CONSULTING"
+                  required
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Site Web</label>
-                <input type="text" value={website} onChange={(e) => setWebsite(e.target.value)} className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none" />
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Site Web
+                </label>
+                <input
+                  type="text"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none focus:border-blue-400 focus:bg-white transition-colors"
+                  placeholder="www.exemple.com"
+                />
               </div>
             </div>
 
+            {/* ── TÉLÉPHONE + EMAIL + COULEUR ── */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Téléphone</label>
-                <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none" />
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Téléphone <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none focus:border-blue-400 focus:bg-white transition-colors"
+                  placeholder="+228 90 00 00 00"
+                  required
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Email</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none" />
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none focus:border-blue-400 focus:bg-white transition-colors"
+                  placeholder="contact@exemple.com"
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Couleur</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Couleur principale
+                </label>
                 <div className="flex items-center gap-2">
-                  <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="w-10 h-10 p-1 border rounded-xl cursor-pointer" />
-                  <span className="text-xs font-medium text-gray-600">{primaryColor}</span>
+                  <input
+                    type="color"
+                    value={primaryColor}
+                    onChange={(e) => setPrimaryColor(e.target.value)}
+                    className="w-10 h-10 p-1 border rounded-xl cursor-pointer"
+                  />
+                  <span className="text-xs font-medium text-gray-600">
+                    {primaryColor}
+                  </span>
                 </div>
               </div>
             </div>
 
+            {/* ── ADRESSE ── */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Adresse</label>
-              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none" />
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Adresse
+              </label>
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none focus:border-blue-400 focus:bg-white transition-colors"
+                placeholder="Quartier, Ville, Pays"
+              />
             </div>
 
+            {/* ── NIF + RCCM + CNSS ── */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">NIF</label>
-                <input type="text" value={nif} onChange={(e) => setNif(e.target.value)} className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none" />
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  NIF
+                </label>
+                <input
+                  type="text"
+                  value={nif}
+                  onChange={(e) => setNif(e.target.value)}
+                  className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none focus:border-blue-400 focus:bg-white transition-colors"
+                  placeholder="Numéro NIF"
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">RCCM</label>
-                <input type="text" value={rccm} onChange={(e) => setRccm(e.target.value)} className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none" />
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  RCCM
+                </label>
+                <input
+                  type="text"
+                  value={rccm}
+                  onChange={(e) => setRccm(e.target.value)}
+                  className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none focus:border-blue-400 focus:bg-white transition-colors"
+                  placeholder="Numéro RCCM"
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">CNSS</label>
-                <input type="text" value={cnss} onChange={(e) => setCnss(e.target.value)} className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none" />
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  CNSS
+                </label>
+                <input
+                  type="text"
+                  value={cnss}
+                  onChange={(e) => setCnss(e.target.value)}
+                  className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none focus:border-blue-400 focus:bg-white transition-colors"
+                  placeholder="Numéro CNSS"
+                />
               </div>
             </div>
 
+            {/* ── SERVICES ── */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Services</label>
-              <textarea value={services} onChange={(e) => setServices(e.target.value)} rows="2" className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none"></textarea>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Services <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={services}
+                onChange={(e) => setServices(e.target.value)}
+                rows="3"
+                className="w-full p-2.5 text-sm border rounded-xl bg-gray-50 outline-none focus:border-blue-400 focus:bg-white transition-colors resize-none"
+                placeholder="Ex : Comptabilité, Conseil fiscal, Formation en gestion..."
+                required
+              ></textarea>
             </div>
 
+            {/* ── NOTE CHAMPS OBLIGATOIRES ── */}
+            <p className="text-[10px] text-gray-400">
+              <span className="text-red-500 font-bold">*</span> Champs
+              obligatoires
+            </p>
+
+            {/* ── BOUTON ENREGISTRER ── */}
             <div className="flex justify-end pt-2">
-              <button type="submit" disabled={isSaving} className="px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 text-xs shadow-sm disabled:opacity-50">
-                {isSaving ? "Enregistrement..." : "Enregistrer les paramètres"}
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 text-xs shadow-sm disabled:opacity-50 transition-colors"
+              >
+                {isSaving ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-white"></span>
+                    Enregistrement...
+                  </span>
+                ) : (
+                  "Enregistrer les paramètres"
+                )}
               </button>
             </div>
           </form>
-
         </div>
       </main>
     </div>

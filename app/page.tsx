@@ -30,6 +30,24 @@ export default function DashboardPage() {
   const [reportStart, setReportStart] = useState<string>(todayStr);
   const [reportEnd, setReportEnd] = useState<string>(todayStr);
 
+  // NOUVEAU : horloge en temps réel (date + heure du jour)
+  const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedDate = currentDateTime.toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+  const formattedTime = currentDateTime.toLocaleTimeString('fr-FR');
+
   const router = useRouter();
 
   useEffect(() => {
@@ -98,6 +116,10 @@ export default function DashboardPage() {
     return 0;
   };
 
+  const getRemainingAmount = (inv: any): number => {
+    return Math.max(0, getAmount(inv) - getCollectedAmount(inv));
+  };
+
   const isOverdue30Days = (inv: any): boolean => {
     const status = getStatus(inv);
     if (!isPending(status)) return false;
@@ -109,7 +131,8 @@ export default function DashboardPage() {
 
   const overdueInvoices = invoices.filter((inv: any) => isOverdue30Days(inv));
   const pendingInvoices = invoices.filter((inv: any) => isPending(getStatus(inv)));
-  const totalPending = pendingInvoices.reduce((sum: number, inv: any) => sum + getAmount(inv), 0);
+  
+  const totalPending = pendingInvoices.reduce((sum: number, inv: any) => sum + getRemainingAmount(inv), 0);
   
   const totalRevenue = invoices.reduce((sum: number, inv: any) => {
     const status = getStatus(inv);
@@ -138,8 +161,9 @@ export default function DashboardPage() {
       if (isLastMonth) caLastMonth += collected;
     }
     if (isPending(status)) {
-      if (isCurrentMonth) pendingCurrentMonth += getAmount(inv);
-      if (isLastMonth) pendingLastMonth += getAmount(inv);
+      const remaining = getRemainingAmount(inv);
+      if (isCurrentMonth) pendingCurrentMonth += remaining;
+      if (isLastMonth) pendingLastMonth += remaining;
     }
   });
 
@@ -162,7 +186,7 @@ export default function DashboardPage() {
         if (isPaid(status) || isPartialPayment(status)) {
           data[monthKey].revenus += getCollectedAmount(inv);
         }
-        if (isPending(status)) data[monthKey].attente += getAmount(inv);
+        if (isPending(status)) data[monthKey].attente += getRemainingAmount(inv);
       }
     });
     return Object.values(data);
@@ -292,12 +316,21 @@ export default function DashboardPage() {
       )}
 
       {/* HEADER HAUT SANS LOGO (GÉRÉ PAR LA SIDEBAR) */}
-      <header className="bg-white border-b border-gray-200 px-4 md:px-8 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-        <div>
-          <h1 className="text-sm md:text-base font-extrabold text-gray-900 hidden md:block uppercase tracking-tight">Vue d'ensemble</h1>
+      <header className="bg-white border-b border-gray-200 px-4 md:px-8 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm gap-4">
+        <div className="flex items-center gap-4 min-w-0">
+          <h1 className="text-sm md:text-base font-extrabold text-gray-900 hidden md:block uppercase tracking-tight whitespace-nowrap">Vue d'ensemble</h1>
+          
+          {/* NOUVEAU : Horloge en temps réel (date + heure) */}
+          <div className="hidden lg:flex items-center gap-2 pl-4 border-l border-gray-200">
+            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <div className="flex flex-col leading-tight">
+              <span className="text-xs font-bold text-gray-700 capitalize whitespace-nowrap">{formattedDate}</span>
+              <span className="text-[11px] text-gray-400 font-mono whitespace-nowrap">{formattedTime}</span>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-4 ml-auto">
+        <div className="flex items-center gap-4 ml-auto flex-shrink-0">
           <div className="relative">
             <button 
               onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
@@ -320,13 +353,13 @@ export default function DashboardPage() {
                   {overdueInvoices.length > 0 ? (
                     overdueInvoices.map((inv: any) => (
                       <div key={inv.id} className="p-4 hover:bg-gray-50 transition-colors flex flex-col gap-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-gray-800">{inv.clientName || 'Client'}</span>
-                          <span className="text-xs font-black text-red-600">{formatCurrency(getAmount(inv))}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-gray-800 truncate">{inv.clientName || 'Client'}</span>
+                          <span className="text-xs font-black text-red-600 whitespace-nowrap">{formatCurrency(getRemainingAmount(inv))}</span>
                         </div>
                         <div className="flex items-center justify-between text-[11px] text-gray-400 font-medium">
                           <span>Facture {inv.number || 'N/A'}</span>
-                          <span className="text-red-500 font-semibold">&gt; 30 jours de retard</span>
+                          <span className="text-red-500 font-semibold whitespace-nowrap">&gt; 30 jours de retard</span>
                         </div>
                       </div>
                     ))
@@ -337,7 +370,7 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-gray-800 to-gray-900 text-white flex items-center justify-center font-bold text-sm shadow-md">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-gray-800 to-gray-900 text-white flex items-center justify-center font-bold text-sm shadow-md flex-shrink-0">
             {businessData?.businessName ? businessData.businessName.charAt(0).toUpperCase() : "J"}
           </div>
         </div>
@@ -352,6 +385,10 @@ export default function DashboardPage() {
             <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight break-words">
               {businessData?.businessName || "JBLESS CONSULTING"}
             </h2>
+            {/* Horloge visible aussi sur mobile/tablette, sous le nom de l'entreprise */}
+            <p className="lg:hidden text-xs font-medium text-gray-400 mt-2 capitalize">
+              {formattedDate} — <span className="font-mono">{formattedTime}</span>
+            </p>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
             <button 
@@ -365,44 +402,61 @@ export default function DashboardPage() {
               href="/factures/nouvelle" 
               className="w-full sm:w-auto text-center px-6 py-4 sm:py-3.5 bg-blue-600 text-white text-base sm:text-sm font-bold rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/30 hover:-translate-y-0.5 active:scale-[0.98]"
             >
-              Créer un document
+              Créer une facture
             </Link>
           </div>
         </div>
 
         {/* CARTES KPI */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-          <div className="group bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col justify-between">
-            <div className="flex justify-between items-start mb-4">
+          <div className="group bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col justify-between min-w-0">
+            <div className="flex justify-between items-start mb-4 gap-2">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Chiffre d'affaires (Total)</span>
-              <div className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg ${caVariation >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'}`}>
+              <div className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg whitespace-nowrap flex-shrink-0 ${caVariation >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'}`}>
                 {caVariation >= 0 ? '↑' : '↓'} {Math.abs(caVariation).toFixed(1)}%
               </div>
             </div>
-            <p className="text-3xl md:text-4xl font-extrabold text-gray-900 break-words">{formatCurrency(totalRevenue)}</p>
+            <p 
+              className="font-extrabold text-gray-900 whitespace-nowrap overflow-hidden"
+              style={{ fontSize: "clamp(1.25rem, 3.2vw, 2.25rem)" }}
+              title={formatCurrency(totalRevenue)}
+            >
+              {formatCurrency(totalRevenue)}
+            </p>
             <p className="text-xs text-gray-500 mt-3 font-medium">Factures payées et paiements partiels</p>
           </div>
 
-          <div className="group bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col justify-between relative overflow-hidden">
+          <div className="group bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col justify-between relative overflow-hidden min-w-0">
             <div className="absolute top-0 right-0 w-2 h-full bg-red-500 group-hover:w-3 transition-all duration-300"></div>
             <div className="flex justify-between items-start mb-4">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">En attente de paiement</span>
             </div>
-            <p className="text-3xl md:text-4xl font-extrabold text-gray-900 break-words">{formatCurrency(totalPending)}</p>
+            <p 
+              className="font-extrabold text-gray-900 whitespace-nowrap overflow-hidden"
+              style={{ fontSize: "clamp(1.25rem, 3.2vw, 2.25rem)" }}
+              title={formatCurrency(totalPending)}
+            >
+              {formatCurrency(totalPending)}
+            </p>
             <div className="mt-3">
               {pendingInvoices.length > 0 ? (
-                <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg inline-block">{pendingInvoices.length} facture(s) en attente</span>
+                <span className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg inline-block whitespace-nowrap">{pendingInvoices.length} facture(s) en attente</span>
               ) : (
                 <span className="text-xs text-gray-500 font-medium">Aucune dette à recouvrer</span>
               )}
             </div>
           </div>
 
-          <div className="group bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col justify-between">
+          <div className="group bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col justify-between min-w-0">
             <div className="mb-4">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Base clients</span>
             </div>
-            <p className="text-3xl md:text-4xl font-extrabold text-gray-900">{customersCount}</p>
+            <p 
+              className="font-extrabold text-gray-900 whitespace-nowrap overflow-hidden"
+              style={{ fontSize: "clamp(1.25rem, 3.2vw, 2.25rem)" }}
+            >
+              {customersCount}
+            </p>
             <p className="text-xs text-gray-500 mt-3 font-medium">Clients enregistrés</p>
           </div>
         </div>
@@ -413,21 +467,21 @@ export default function DashboardPage() {
             <div className="px-6 py-5 border-b border-gray-100">
               <h3 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider">À recouvrer</h3>
             </div>
-            <div className="flex-1 overflow-y-auto p-3">
-              <table className="w-full text-left border-collapse">
+            <div className="flex-1 overflow-auto p-3">
+              <table className="w-full min-w-[500px] text-left border-collapse">
                 <thead className="bg-gray-50/80 rounded-xl">
                   <tr className="text-gray-400 text-xs font-bold uppercase tracking-wider">
-                    <th className="px-4 py-3 rounded-l-xl">Client</th>
-                    <th className="px-4 py-3">N° Facture</th>
-                    <th className="px-4 py-3 rounded-r-xl text-right">Montant</th>
+                    <th className="px-4 py-3 rounded-l-xl whitespace-nowrap">Client</th>
+                    <th className="px-4 py-3 whitespace-nowrap">N° Facture</th>
+                    <th className="px-4 py-3 rounded-r-xl text-right whitespace-nowrap">Montant</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm">
                   {pendingInvoices.length > 0 ? pendingInvoices.map((inv: any) => (
                     <tr key={inv.id} className="hover:bg-gray-50 border-b border-gray-50 group cursor-pointer transition-colors">
-                      <td className="px-4 py-4 font-bold text-gray-800">{inv.clientName}</td>
-                      <td className="px-4 py-4 font-medium text-gray-500">{inv.number}</td>
-                      <td className="px-4 py-4 font-black text-red-600 text-right group-hover:text-red-700">{formatCurrency(getAmount(inv))}</td>
+                      <td className="px-4 py-4 font-bold text-gray-800 whitespace-nowrap">{inv.clientName}</td>
+                      <td className="px-4 py-4 font-medium text-gray-500 whitespace-nowrap">{inv.number}</td>
+                      <td className="px-4 py-4 font-black text-red-600 text-right group-hover:text-red-700 whitespace-nowrap">{formatCurrency(getRemainingAmount(inv))}</td>
                     </tr>
                   )) : (
                     <tr><td colSpan={3} className="px-4 py-16 text-center text-gray-400 font-medium"><div className="flex flex-col items-center justify-center gap-3"><span className="text-3xl">🎉</span>Toutes vos factures sont réglées !</div></td></tr>
@@ -442,26 +496,26 @@ export default function DashboardPage() {
               <div className="flex gap-5">
                 <button 
                   onClick={() => setActiveRecentTab("invoices")} 
-                  className={`text-sm font-extrabold uppercase tracking-wider transition-colors cursor-pointer ${activeRecentTab === "invoices" ? "text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                  className={`text-sm font-extrabold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap ${activeRecentTab === "invoices" ? "text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
                 >
                   Factures
                 </button>
                 <button 
                   onClick={() => setActiveRecentTab("proformas")} 
-                  className={`text-sm font-extrabold uppercase tracking-wider transition-colors cursor-pointer ${activeRecentTab === "proformas" ? "text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                  className={`text-sm font-extrabold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap ${activeRecentTab === "proformas" ? "text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
                 >
                   Proformas
                 </button>
               </div>
-              <Link href="/factures" className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">Tout voir &rarr;</Link>
+              <Link href="/factures" className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors whitespace-nowrap">Tout voir &rarr;</Link>
             </div>
-            <div className="flex-1 overflow-y-auto p-3">
-              <table className="w-full text-left border-collapse">
+            <div className="flex-1 overflow-auto p-3">
+              <table className="w-full min-w-[400px] text-left border-collapse">
                 <thead className="bg-gray-50/80 rounded-xl">
                   <tr className="text-gray-400 text-xs font-bold uppercase tracking-wider">
-                    <th className="px-4 py-3 rounded-l-xl">N°</th>
-                    <th className="px-4 py-3">Client</th>
-                    <th className="px-4 py-3 rounded-r-xl">Statut</th>
+                    <th className="px-4 py-3 rounded-l-xl whitespace-nowrap">N°</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Client</th>
+                    <th className="px-4 py-3 rounded-r-xl whitespace-nowrap">Statut</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm">
@@ -470,10 +524,10 @@ export default function DashboardPage() {
                     const pending = isPending(status);
                     return (
                       <tr key={inv.id} className="hover:bg-gray-50 border-b border-gray-50 cursor-pointer transition-colors">
-                        <td className="px-4 py-4 font-medium text-gray-500">{inv.number}</td>
-                        <td className="px-4 py-4 font-bold text-gray-800">{inv.clientName}</td>
-                        <td className="px-4 py-4">
-                          <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-wider uppercase ${
+                        <td className="px-4 py-4 font-medium text-gray-500 whitespace-nowrap">{inv.number}</td>
+                        <td className="px-4 py-4 font-bold text-gray-800 whitespace-nowrap">{inv.clientName}</td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-wider uppercase whitespace-nowrap ${
                             activeRecentTab === "proformas" ? 'bg-amber-50 text-amber-600 border border-amber-100' :
                             (pending ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100')
                           }`}>
@@ -498,7 +552,7 @@ export default function DashboardPage() {
               <h3 className="text-base font-extrabold text-gray-900">Évolution de l'activité</h3>
               <p className="text-xs text-gray-500 font-medium mt-1">Factures payées vs impayés sur 6 mois (Hors proforma)</p>
             </div>
-            <div className="flex items-center gap-4 text-xs font-bold">
+            <div className="flex items-center gap-4 text-xs font-bold whitespace-nowrap">
               <span className="flex items-center gap-2"><span className="w-3 h-3 bg-emerald-400 rounded-sm"></span> Encaissé</span>
               <span className="flex items-center gap-2"><span className="w-3 h-3 bg-red-400 rounded-sm"></span> En attente</span>
             </div>
