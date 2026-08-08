@@ -1,18 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/firebase";
 
-const getDaysRemaining = (endDateString) => {
-  if (!endDateString) return 0;
-  const endDate = new Date(endDateString);
+// 🆕 Gère aussi bien une string ISO qu'un Timestamp Firestore (robustesse,
+// alignée avec computeDaysLeft() utilisé côté dashboard admin).
+const getDaysRemaining = (endDateValue) => {
+  if (!endDateValue) return 0;
+  const endDate = endDateValue?.toDate ? endDateValue.toDate() : new Date(endDateValue);
   const today = new Date();
   const diffTime = endDate.getTime() - today.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays > 0 ? diffDays : 0;
+};
+
+// 🆕 Traduit l'identifiant technique du plan (écrit par le webhook) en libellé lisible
+const planLabel = (planId) => {
+  switch (planId) {
+    case "1year":
+      return "Annuel";
+    case "6months":
+      return "Semestriel";
+    case "1month":
+      return "Mensuel";
+    default:
+      return null;
+  }
 };
 
 export default function SettingsPage() {
@@ -21,6 +37,7 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingStamp, setIsUploadingStamp] = useState(false);
+  const [isPaymentPending, setIsPaymentPending] = useState(false); // ✅ Nouvel état
 
   const [pricing, setPricing] = useState({
     monthly: 5000,
@@ -47,7 +64,12 @@ export default function SettingsPage() {
   const [subscription, setSubscription] = useState({
     status: "trial",
     endDate: null,
+    plan: null, // 🆕 Plan actif renvoyé par le webhook ("1month" | "6months" | "1year" | null)
   });
+
+  // ✅ Ref pour détecter le changement de date via le webhook (anti-doublon d'alerte)
+  const previousEndDateRef = useRef(null);
+  const previousPlanRef = useRef(null);
 
   const plans = [
     {
@@ -119,7 +141,6 @@ export default function SettingsPage() {
           setRccm(data.rccm || "");
           setCnss(data.cnss || "");
           setPrimaryColor(data.primaryColor || "#2563eb");
-          // 🆕 Charger l'image cachet+signature
           setStampSignatureUrl(data.stampSignatureUrl || "");
         }
 
@@ -132,7 +153,28 @@ export default function SettingsPage() {
               userData.subscriptionStatus ||
               userData.subscription?.status ||
               "trial";
-            setSubscription({ status, endDate });
+
+            // 🆕 Lecture du plan actif écrit par le webhook (champ racine
+            // prioritaire, avec fallback sur subscription.plan)
+            const activePlan = userData.plan || userData.subscription?.plan || null;
+
+            // ✅ Détection automatique de l'activation par le webhook
+            // 🆕 On détecte aussi bien un changement de date qu'un changement de plan
+            // (cas d'un renouvellement le même jour où la date ne bouge pas visuellement)
+            const hasChanged =
+              previousEndDateRef.current !== endDate ||
+              previousPlanRef.current !== activePlan;
+
+            if (isPaymentPending && hasChanged && status === "active") {
+              setIsPaymentPending(false);
+              alert(
+                `✅ Paiement confirmé ! Votre abonnement (${planLabel(activePlan) || "Actif"}) est valide jusqu'au ${new Date(endDate).toLocaleDateString("fr-FR")}.`
+              );
+            }
+
+            previousEndDateRef.current = endDate;
+            previousPlanRef.current = activePlan;
+            setSubscription({ status, endDate, plan: activePlan });
           }
         });
       } catch (error) {
@@ -147,7 +189,7 @@ export default function SettingsPage() {
       unsubscribeAuth();
       unsubscribeUser();
     };
-  }, [router]);
+  }, [router, isPaymentPending]);
 
   // Fonction générique de traitement d'image avec suppression de fond
   const processImage = (file, callback, maxWidth = 400, maxHeight = 400, setUploading = null) => {
@@ -182,7 +224,6 @@ export default function SettingsPage() {
         ctx.clearRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Suppression du fond clair (blanc, beige, gris clair)
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
         const bgR = data[0];
@@ -213,10 +254,8 @@ export default function SettingsPage() {
     processImage(file, setLogoUrl, 400, 400);
   };
 
-  // 🆕 Handler unique pour cachet + signature
   const handleStampSignatureUpload = (e) => {
     const file = e.target.files?.[0];
-    // Dimensions larges pour bien contenir la signature + cachet ensemble
     processImage(file, setStampSignatureUrl, 500, 300, setIsUploadingStamp);
   };
 
@@ -239,7 +278,6 @@ export default function SettingsPage() {
           rccm,
           cnss,
           primaryColor,
-          // 🆕 Sauvegarder l'image cachet+signature
           stampSignatureUrl,
         },
         { merge: true }
@@ -253,11 +291,17 @@ export default function SettingsPage() {
     }
   };
 
+  // ✅ FONCTION SÉCURISÉE : plus AUCUNE écriture Firestore côté client
   const handlePaymentClick = (plan) => {
     if (typeof window === "undefined" || !window.FedaPay) {
       alert(
         "Le module de paiement est en cours de chargement. Veuillez patienter quelques secondes et réessayer."
       );
+      return;
+    }
+
+    if (isPaymentPending) {
+      alert("Un paiement est déjà en cours de traitement. Veuillez patienter.");
       return;
     }
 
@@ -267,6 +311,9 @@ export default function SettingsPage() {
         transaction: {
           amount: plan.price,
           description: `Abonnement Billio - ${plan.duration}`,
+          // 🆕 Ces clés doivent impérativement correspondre à ce que lit le webhook
+          // (metadata.userId, metadata.planId, metadata.months) — ne pas renommer
+          // sans adapter également /api/webhook/route.js
           custom_metadata: {
             userId: currentUser.uid,
             planId: plan.id,
@@ -277,7 +324,7 @@ export default function SettingsPage() {
           email: email || currentUser?.email || "client@jblessconsulting.com",
           firstname: companyName || "Client",
         },
-        onComplete: async (response) => {
+        onComplete: (response) => {
           if (response.reason !== "checkout_completed") return;
 
           if (
@@ -288,35 +335,12 @@ export default function SettingsPage() {
             return;
           }
 
-          const now = new Date();
-          const currentEndDate = subscription.endDate
-            ? new Date(subscription.endDate)
-            : now;
-          const baseDate = currentEndDate > now ? currentEndDate : now;
-          const newEndDate = new Date(baseDate);
-          newEndDate.setMonth(newEndDate.getMonth() + plan.months);
-
-          try {
-            const userDocRef = doc(db, "users", currentUser.uid);
-            await setDoc(
-              userDocRef,
-              {
-                subscriptionStatus: "active",
-                trialEndDate: newEndDate.toISOString(),
-                lastPaymentAmount: plan.price,
-                updatedAt: now.toISOString(),
-              },
-              { merge: true }
-            );
-            alert(
-              `Paiement validé ! Abonnement prolongé jusqu'au ${newEndDate.toLocaleDateString("fr-FR")}.`
-            );
-          } catch (firestoreError) {
-            console.error("Erreur Firestore :", firestoreError);
-            alert(
-              "Paiement validé, mais erreur de mise à jour. Contactez le support."
-            );
-          }
+          // ✅ On NE MET PLUS À JOUR Firestore ici (sécurité).
+          // C'est le webhook serveur (/api/webhook) qui valide et active l'abonnement.
+          setIsPaymentPending(true);
+          alert(
+            "✅ Paiement reçu ! Votre abonnement sera activé automatiquement dans quelques instants..."
+          );
         },
         onClose: () => console.log("Fenêtre de paiement fermée."),
       });
@@ -336,7 +360,6 @@ export default function SettingsPage() {
     );
   }
 
-  // Style damier pour fond transparent
   const checkerboardStyle = {
     backgroundImage: `linear-gradient(45deg, #e5e7eb 25%, transparent 25%), 
                       linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), 
@@ -345,6 +368,9 @@ export default function SettingsPage() {
     backgroundSize: `12px 12px`,
     backgroundPosition: `0 0, 0 6px, 6px -6px, -6px 0px`,
   };
+
+  // 🆕 Libellé du plan actif pour l'affichage dans la bannière
+  const activePlanLabel = planLabel(subscription.plan);
 
   return (
     <div className="flex-1 flex flex-col min-h-full font-sans text-gray-900 bg-gray-50/50">
@@ -369,7 +395,7 @@ export default function SettingsPage() {
                   }`}
                 >
                   {subscription.status === "active"
-                    ? "Abonné"
+                    ? `Abonné${activePlanLabel ? ` · ${activePlanLabel}` : ""}`
                     : "Essai gratuit"}
                 </span>
                 <h2 className="text-base font-bold">Mon Espace Billio</h2>
@@ -381,45 +407,69 @@ export default function SettingsPage() {
               </p>
             </div>
 
+            {/* ✅ Bannière de paiement en cours */}
+            {isPaymentPending && (
+              <div className="mb-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-400"></div>
+                <p className="text-xs text-blue-300 font-medium">
+                  Confirmation du paiement en cours...
+                </p>
+              </div>
+            )}
+
             <p className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
               Cliquez sur la formule de votre choix pour régler
               instantanément :
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {plans.map((plan) => (
-                <div
-                  key={plan.id}
-                  onClick={() => handlePaymentClick(plan)}
-                  className="relative bg-slate-800/90 hover:bg-slate-800 rounded-xl p-4 border border-slate-700 hover:border-blue-500 transition-all cursor-pointer flex flex-col justify-between group shadow-sm hover:shadow-md"
-                >
-                  {plan.badge && (
-                    <span
-                      className={`absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 text-[9px] font-bold rounded-full tracking-wider shadow-sm ${plan.badge.color}`}
-                    >
-                      {plan.badge.text}
-                    </span>
-                  )}
-                  <div>
-                    <h4 className="text-[11px] font-bold text-slate-400 tracking-wider mb-1 mt-0.5">
-                      {plan.duration}
-                    </h4>
-                    <div className="text-xl font-black text-white mb-0.5 group-hover:text-blue-400 transition-colors">
-                      {plan.price.toLocaleString()}{" "}
-                      <span className="text-xs font-bold text-blue-400">F</span>
+              {plans.map((plan) => {
+                const isCurrentPlan =
+                  subscription.status === "active" && subscription.plan === plan.id;
+                return (
+                  <div
+                    key={plan.id}
+                    onClick={() => handlePaymentClick(plan)}
+                    className={`relative bg-slate-800/90 hover:bg-slate-800 rounded-xl p-4 border transition-all cursor-pointer flex flex-col justify-between group shadow-sm hover:shadow-md ${
+                      isCurrentPlan
+                        ? "border-emerald-500 ring-1 ring-emerald-500/40"
+                        : "border-slate-700 hover:border-blue-500"
+                    } ${isPaymentPending ? "opacity-50 pointer-events-none" : ""}`}
+                  >
+                    {isCurrentPlan ? (
+                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 text-[9px] font-bold rounded-full tracking-wider shadow-sm bg-emerald-500 text-white">
+                        FORMULE ACTIVE
+                      </span>
+                    ) : (
+                      plan.badge && (
+                        <span
+                          className={`absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 text-[9px] font-bold rounded-full tracking-wider shadow-sm ${plan.badge.color}`}
+                        >
+                          {plan.badge.text}
+                        </span>
+                      )
+                    )}
+                    <div>
+                      <h4 className="text-[11px] font-bold text-slate-400 tracking-wider mb-1 mt-0.5">
+                        {plan.duration}
+                      </h4>
+                      <div className="text-xl font-black text-white mb-0.5 group-hover:text-blue-400 transition-colors">
+                        {plan.price.toLocaleString()}{" "}
+                        <span className="text-xs font-bold text-blue-400">F</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        {Math.round(plan.price / plan.months).toLocaleString()} F
+                        / mois
+                      </p>
                     </div>
-                    <p className="text-[10px] text-slate-400">
-                      {Math.round(plan.price / plan.months).toLocaleString()} F
-                      / mois
-                    </p>
+                    <div className="mt-3 pt-2 border-t border-slate-700/60 flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-blue-400 group-hover:underline">
+                        {isCurrentPlan ? "Renouveler / Prolonger →" : "Payer maintenant →"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-3 pt-2 border-t border-slate-700/60 flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-blue-400 group-hover:underline">
-                      Payer maintenant →
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -486,7 +536,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* ── 🆕 CACHET & SIGNATURE (image unique) ── */}
+            {/* ── CACHET & SIGNATURE (image unique) ── */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                 Cachet & Signature{" "}
@@ -497,7 +547,6 @@ export default function SettingsPage() {
               </label>
 
               <div className="flex flex-col sm:flex-row items-center gap-4 p-4 border border-dashed border-indigo-200 rounded-xl bg-indigo-50/30">
-                {/* Aperçu */}
                 <div
                   className="w-full sm:w-64 h-28 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden shrink-0 relative"
                   style={checkerboardStyle}
@@ -525,7 +574,6 @@ export default function SettingsPage() {
                   )}
                 </div>
 
-                {/* Contrôles */}
                 <div className="flex-1 space-y-2 text-center sm:text-left">
                   <p className="text-[11px] text-gray-600 leading-relaxed">
                     Scannez ou photographiez votre cachet avec votre signature
@@ -561,7 +609,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Aperçu dans le contexte d'une facture */}
               {stampSignatureUrl && (
                 <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
                   <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
@@ -732,13 +779,11 @@ export default function SettingsPage() {
               ></textarea>
             </div>
 
-            {/* ── NOTE CHAMPS OBLIGATOIRES ── */}
             <p className="text-[10px] text-gray-400">
               <span className="text-red-500 font-bold">*</span> Champs
               obligatoires
             </p>
 
-            {/* ── BOUTON ENREGISTRER ── */}
             <div className="flex justify-end pt-2">
               <button
                 type="submit"

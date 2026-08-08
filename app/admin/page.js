@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -14,7 +13,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid 
 } from "recharts";
 
-// --- Composants d'icônes SVG professionnels ---
+// --- Icônes SVG ---
 const IconOverview = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
 const IconUsers = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
 const IconPricing = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
@@ -24,10 +23,39 @@ const IconSend = () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0
 const IconMenu = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>;
 const IconClose = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
 
-// Formate un timestamp Firestore en heure lisible
 const formatChatTime = (timestamp) => {
   if (!timestamp?.toDate) return "...";
   return timestamp.toDate().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+};
+
+// Calcule les jours restants depuis la date de fin (trialEndDate / endDate)
+const computeDaysLeft = (userData) => {
+  const sub = userData.subscription || {};
+  const endDateStr = userData.trialEndDate || userData.endDate;
+  if (endDateStr) {
+    return Math.ceil((new Date(endDateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  }
+  if (sub.expiresAt) {
+    const d = sub.expiresAt.toDate ? sub.expiresAt.toDate() : new Date(sub.expiresAt);
+    return Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  }
+  return typeof sub.daysLeft === "number" ? sub.daysLeft : 30;
+};
+
+// 🆕 Résout le plan de l'utilisateur en cherchant dans plusieurs emplacements possibles.
+// Si aucun plan explicite n'est trouvé mais que l'abonnement est actif,
+// on retombe sur "1month" par défaut au lieu de "Essai" (sinon le graphique
+// "Popularité des Formules" ne comptabilise jamais ces abonnés actifs).
+const resolvePlan = (userData, sub, computedStatus) => {
+  const plan =
+    sub.plan ||
+    userData.plan ||
+    userData.subscriptionPlan ||
+    (sub.type ?? null);
+
+  if (plan) return plan;
+
+  return computedStatus === "active" ? "1month" : "Essai";
 };
 
 export default function AdminDashboardPage() {
@@ -39,9 +67,11 @@ export default function AdminDashboardPage() {
   const [isSavingHelp, setIsSavingHelp] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
-
-  // NOUVEAU : état d'ouverture du menu mobile (drawer)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Rappels WhatsApp (AfriMsg)
+  const [sendingReminderTo, setSendingReminderTo] = useState(null);
+  const [isSendingBulkReminder, setIsSendingBulkReminder] = useState(false);
 
   const [stats, setStats] = useState({
     totalUsers: 0, activeUsers: 0, trialUsers: 0, expiredUsers: 0, totalRevenue: 0,
@@ -55,7 +85,6 @@ export default function AdminDashboardPage() {
   const [newTutorial, setNewTutorial] = useState({ title: "", embedUrl: "" });
   const [editingTutorial, setEditingTutorial] = useState(null);
 
-  // --- États MESSAGERIE ---
   const [conversations, setConversations] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
@@ -74,7 +103,6 @@ export default function AdminDashboardPage() {
     return () => unsubscribe();
   }, [router]);
 
-  // Écoute en temps réel de TOUTES les conversations (pour la liste + le badge de notif)
   useEffect(() => {
     if (!isAdminVerified) return;
     const q = query(collection(db, "chats"), orderBy("lastMessageAt", "desc"));
@@ -87,7 +115,6 @@ export default function AdminDashboardPage() {
     return () => unsub();
   }, [isAdminVerified]);
 
-  // Écoute en temps réel des messages de la conversation sélectionnée
   useEffect(() => {
     if (!selectedChatId) { setChatMessages([]); return; }
     const q = query(collection(db, "chats", selectedChatId, "messages"), orderBy("timestamp", "asc"));
@@ -95,7 +122,6 @@ export default function AdminDashboardPage() {
       setChatMessages(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
       setTimeout(() => chatScrollRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
-    // Marque comme lu côté admin
     updateDoc(doc(db, "chats", selectedChatId), { unreadByAdmin: 0 }).catch(() => {});
     return () => unsub();
   }, [selectedChatId]);
@@ -145,12 +171,13 @@ export default function AdminDashboardPage() {
       for (const userDoc of usersSnap.docs) {
         total++;
         const userData = userDoc.data();
-        const sub = userData.subscription || { status: "trial", daysLeft: 30 };
+        const sub = userData.subscription || {};
         const companySnap = await getDoc(doc(db, "users", userDoc.id, "settings", "company"));
         const companyData = companySnap.exists() ? companySnap.data() : {};
 
-        let computedStatus = sub.status || "trial";
-        if (computedStatus === "trial" && (sub.daysLeft <= 0 || sub.expired)) {
+        const daysLeft = computeDaysLeft(userData);
+        let computedStatus = userData.subscriptionStatus || sub.status || "trial";
+        if (computedStatus !== "expired" && daysLeft <= 0) {
           computedStatus = "expired";
         }
 
@@ -158,22 +185,31 @@ export default function AdminDashboardPage() {
         else if (computedStatus === "trial") trial++;
         else expired++;
 
-        if (userData.totalPaid) {
-          revenue += Number(userData.totalPaid);
+        // 🆕 CA : priorité au montant réellement payé (cumulé via increment)
+        if (typeof userData.totalPaid === "number" && userData.totalPaid > 0) {
+          revenue += userData.totalPaid;
+        } else if (typeof userData.lastPaymentAmount === "number" && userData.lastPaymentAmount > 0) {
+          // Compatibilité avec anciens paiements enregistrés avant le correctif
+          revenue += userData.lastPaymentAmount;
         } else if (computedStatus === "active") {
+          // Dernier recours : estimation si aucun montant n'a été enregistré
           if (sub.plan === "1year") revenue += Number(currentPricing.yearly);
           else if (sub.plan === "6months") revenue += Number(currentPricing.sixMonths);
           else revenue += Number(currentPricing.monthly);
         }
 
+        // 🆕 Détection robuste du plan (fixe le bug du graphique "Popularité des Formules")
+        const resolvedPlan = resolvePlan(userData, sub, computedStatus);
+
         loadedUsers.push({
           uid: userDoc.id,
           email: userData.email || companyData.email || "Non renseigné",
           phone: companyData.phone || userData.phone || "",
-          companyName: companyData.companyName || "Entreprise non configurée",
+          companyName: companyData.companyName || userData.businessName || "Entreprise non configurée",
           status: computedStatus,
-          plan: sub.plan || "Essai",
-          daysLeft: sub.daysLeft ?? 0,
+          plan: resolvedPlan,
+          daysLeft: daysLeft,
+          totalPaid: userData.totalPaid || userData.lastPaymentAmount || 0,
         });
       }
 
@@ -305,10 +341,72 @@ export default function AdminDashboardPage() {
     router.push("/login");
   };
 
-  // NOUVEAU : sélection d'un onglet depuis le menu mobile (ferme le drawer automatiquement)
   const handleSelectTab = (tab) => {
     setActiveTab(tab);
     setIsMobileMenuOpen(false);
+  };
+
+  // ── Rappels WhatsApp via AfriMsg ──
+  const buildReminderMessage = (user) => {
+    if (user.status === "expired" || user.daysLeft <= 0) {
+      return `Bonjour ${user.companyName} 👋,\n\nVotre abonnement JBLESS a expiré. Renouvelez dès maintenant pour retrouver l'accès complet à votre logiciel de facturation.\n\n💳 Contactez-nous pour renouveler votre licence.`;
+    }
+    return `Bonjour ${user.companyName} 👋,\n\nVotre abonnement JBLESS expire dans ${user.daysLeft} jour(s). Pensez à renouveler pour éviter toute interruption de service.\n\n💳 Contactez-nous dès maintenant.`;
+  };
+
+  const isReminderTarget = (u) => !!u.phone && (u.status === "expired" || u.daysLeft <= 3);
+
+  const handleSendReminder = async (user) => {
+    if (!user.phone) {
+      alert("Aucun numéro de téléphone pour ce client");
+      return;
+    }
+    setSendingReminderTo(user.uid);
+    try {
+      const res = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: user.phone, message: buildReminderMessage(user) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      alert(`✅ Rappel envoyé à ${user.companyName}`);
+    } catch (error) {
+      alert(`❌ Erreur : ${error.message}`);
+    } finally {
+      setSendingReminderTo(null);
+    }
+  };
+
+  const handleBulkReminder = async () => {
+    const targets = usersList.filter(isReminderTarget);
+
+    if (targets.length === 0) {
+      alert("Aucun client à rappeler (expiré ou ≤ 3 jours) avec un numéro renseigné.");
+      return;
+    }
+    if (targets.length === 1) {
+      await handleSendReminder(targets[0]);
+      return;
+    }
+    if (!confirm(`Envoyer un rappel WhatsApp à ${targets.length} client(s) ?`)) return;
+
+    setIsSendingBulkReminder(true);
+    try {
+      const messages = targets.map((u) => ({ to: u.phone, message: buildReminderMessage(u) }));
+      const res = await fetch("/api/whatsapp/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, delayMin: 3, delayMax: 8 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      alert(`✅ Envoi groupé lancé pour ${targets.length} client(s).`);
+    } catch (error) {
+      alert(`❌ Erreur : ${error.message}`);
+    } finally {
+      setIsSendingBulkReminder(false);
+    }
   };
 
   const filteredUsers = usersList.filter((user) => {
@@ -330,11 +428,7 @@ export default function AdminDashboardPage() {
     { name: "Essai", count: usersList.filter(u => u.plan === "Essai" || !u.plan).length },
   ];
 
-  // Trouve les infos client (nom société) pour une conversation donnée
-  const getClientInfo = (chatId) => {
-    const found = usersList.find(u => u.uid === chatId);
-    return found || null;
-  };
+  const getClientInfo = (chatId) => usersList.find(u => u.uid === chatId) || null;
 
   const selectedConversation = conversations.find(c => c.id === selectedChatId);
   const selectedClientInfo = selectedChatId ? getClientInfo(selectedChatId) : null;
@@ -350,7 +444,6 @@ export default function AdminDashboardPage() {
     );
   }
 
-  // Configuration des onglets de navigation (utilisée pour desktop ET mobile)
   const navItems = [
     { key: "overview", label: "Vue d'ensemble", icon: <IconOverview /> },
     { key: "users", label: "Répertoire Clients", icon: <IconUsers /> },
@@ -362,13 +455,11 @@ export default function AdminDashboardPage() {
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-100 flex font-sans selection:bg-blue-500/30">
       
-      {/* SIDEBAR ADMIN (DESKTOP) */}
+      {/* SIDEBAR DESKTOP */}
       <aside className="w-72 bg-[#0F172A] border-r border-slate-800 flex-col justify-between hidden md:flex shadow-2xl z-20">
         <div>
           <div className="h-20 px-8 flex items-center gap-4 border-b border-slate-800 bg-slate-900/50">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-lg shadow-blue-500/30 ring-2 ring-slate-900">
-              JB
-            </div>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-lg shadow-blue-500/30 ring-2 ring-slate-900">JB</div>
             <div>
               <h2 className="text-sm font-extrabold tracking-tight text-white">JBLESS ADMIN</h2>
               <span className="text-[10px] text-blue-400 font-bold tracking-widest uppercase">Console SaaS</span>
@@ -385,9 +476,7 @@ export default function AdminDashboardPage() {
                 {item.icon}
                 {item.label}
                 {item.badge > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">
-                    {item.badge}
-                  </span>
+                  <span className="ml-auto bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">{item.badge}</span>
                 )}
               </button>
             ))}
@@ -400,44 +489,28 @@ export default function AdminDashboardPage() {
             <p className="text-xs font-bold text-slate-200 truncate mt-1">admin@jblessconsulting.com</p>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => router.push("/")} className="flex-1 py-2.5 text-center text-xs font-bold bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors text-slate-300 border border-slate-700 hover:border-slate-600">
-              App Client
-            </button>
-            <button onClick={handleLogout} className="py-2.5 px-4 text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-colors border border-red-500/10">
-              Sortir
-            </button>
+            {/* 🆕 Correction : redirige vers le dashboard client, pas la landing page */}
+            <button onClick={() => router.push("/dashboard")} className="flex-1 py-2.5 text-center text-xs font-bold bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors text-slate-300 border border-slate-700 hover:border-slate-600">App Client</button>
+            <button onClick={handleLogout} className="py-2.5 px-4 text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-colors border border-red-500/10">Sortir</button>
           </div>
         </div>
       </aside>
 
-      {/* OVERLAY + DRAWER MOBILE (NOUVEAU) */}
+      {/* DRAWER MOBILE */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
-          {/* Fond sombre cliquable pour fermer */}
-          <div 
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" 
-            onClick={() => setIsMobileMenuOpen(false)}
-          ></div>
-
-          {/* Panneau coulissant */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsMobileMenuOpen(false)}></div>
           <div className="absolute left-0 top-0 h-full w-[80%] max-w-xs bg-[#0F172A] border-r border-slate-800 shadow-2xl flex flex-col justify-between animate-in slide-in-from-left duration-300">
             <div>
               <div className="h-20 px-6 flex items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/50">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-lg shadow-blue-500/30 ring-2 ring-slate-900">
-                    JB
-                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-lg shadow-blue-500/30 ring-2 ring-slate-900">JB</div>
                   <div>
                     <h2 className="text-sm font-extrabold tracking-tight text-white">JBLESS ADMIN</h2>
                     <span className="text-[10px] text-blue-400 font-bold tracking-widest uppercase">Console SaaS</span>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setIsMobileMenuOpen(false)} 
-                  className="p-2 text-slate-400 hover:text-white bg-slate-800/50 rounded-lg transition-colors"
-                >
-                  <IconClose />
-                </button>
+                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-400 hover:text-white bg-slate-800/50 rounded-lg transition-colors"><IconClose /></button>
               </div>
 
               <nav className="p-5 space-y-2 text-sm font-medium">
@@ -450,9 +523,7 @@ export default function AdminDashboardPage() {
                     {item.icon}
                     {item.label}
                     {item.badge > 0 && (
-                      <span className="ml-auto bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">
-                        {item.badge}
-                      </span>
+                      <span className="ml-auto bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">{item.badge}</span>
                     )}
                   </button>
                 ))}
@@ -465,12 +536,9 @@ export default function AdminDashboardPage() {
                 <p className="text-xs font-bold text-slate-200 truncate mt-1">admin@jblessconsulting.com</p>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => router.push("/")} className="flex-1 py-2.5 text-center text-xs font-bold bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors text-slate-300 border border-slate-700 hover:border-slate-600">
-                  App Client
-                </button>
-                <button onClick={handleLogout} className="py-2.5 px-4 text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-colors border border-red-500/10">
-                  Sortir
-                </button>
+                {/* 🆕 Correction : redirige vers le dashboard client, pas la landing page */}
+                <button onClick={() => router.push("/dashboard")} className="flex-1 py-2.5 text-center text-xs font-bold bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors text-slate-300 border border-slate-700 hover:border-slate-600">App Client</button>
+                <button onClick={handleLogout} className="py-2.5 px-4 text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-colors border border-red-500/10">Sortir</button>
               </div>
             </div>
           </div>
@@ -482,16 +550,10 @@ export default function AdminDashboardPage() {
         
         <header className="h-20 border-b border-slate-800 px-4 md:px-10 flex items-center justify-between bg-[#0B1120]/80 backdrop-blur-md sticky top-0 z-10 gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            {/* Bouton hamburger (mobile uniquement) */}
-            <button 
-              onClick={() => setIsMobileMenuOpen(true)} 
-              className="md:hidden p-2 -ml-2 text-slate-300 hover:text-white bg-slate-800/50 rounded-lg transition-colors relative shrink-0"
-            >
+            <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-slate-300 hover:text-white bg-slate-800/50 rounded-lg transition-colors relative shrink-0">
               <IconMenu />
               {totalUnreadMessages > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
-                  {totalUnreadMessages}
-                </span>
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">{totalUnreadMessages}</span>
               )}
             </button>
 
@@ -597,9 +659,24 @@ export default function AdminDashboardPage() {
           {activeTab === "users" && (
             <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-4 md:p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-8">
-                <h3 className="font-extrabold text-base text-white uppercase tracking-wider flex items-center gap-2">
-                    <IconUsers /> Base de données Clients
-                </h3>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h3 className="font-extrabold text-base text-white uppercase tracking-wider flex items-center gap-2">
+                      <IconUsers /> Base de données Clients
+                  </h3>
+                  <button
+                    onClick={handleBulkReminder}
+                    disabled={isSendingBulkReminder}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold text-xs rounded-xl transition-all border border-emerald-500/20 disabled:opacity-50"
+                    title="Envoyer un rappel WhatsApp à tous les clients expirés ou à ≤ 3 jours"
+                  >
+                    {isSendingBulkReminder ? (
+                      <div className="w-3 h-3 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin"></div>
+                    ) : (
+                      <IconChat />
+                    )}
+                    Rappeler les clients expirants
+                  </button>
+                </div>
                 <div className="relative">
                     <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     <input
@@ -638,6 +715,11 @@ export default function AdminDashboardPage() {
                         </td>
                         <td className="py-4 px-4 font-semibold text-slate-300 text-xs capitalize whitespace-nowrap">
                             {u.plan === "1year" ? "Annuel" : u.plan === "6months" ? "Semestriel" : u.plan === "1month" ? "Mensuel" : "Essai (Gratuit)"}
+                            {u.totalPaid > 0 && (
+                              <span className="block text-[10px] text-emerald-400 font-bold mt-0.5">
+                                {u.totalPaid.toLocaleString()} FCFA payés
+                              </span>
+                            )}
                         </td>
                         <td className="py-4 px-4 whitespace-nowrap">
                           <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center w-max gap-1.5
@@ -645,18 +727,35 @@ export default function AdminDashboardPage() {
                               u.status === "trial" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : 
                               "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${u.status === 'active' ? 'bg-emerald-500' : u.status === 'trial' ? 'bg-amber-500' : 'bg-red-500'}`}></span>
-                            {u.status === "active" ? "Actif" : u.status === "trial" ? "En Essai" : "Expiré"}
+                            {u.status === "active" ? `Actif (${u.daysLeft}j)` : u.status === "trial" ? `Essai (${u.daysLeft}j)` : "Expiré"}
                           </span>
                         </td>
                         <td className="py-4 px-4 text-right whitespace-nowrap">
-                          {u.phone ? (
-                            <a href={`https://wa.me/${u.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] font-bold text-xs rounded-xl transition-all border border-[#25D366]/20 hover:scale-105">
-                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
-                              Contacter
-                            </a>
-                          ) : (
-                            <span className="text-slate-600 text-xs italic">Aucun numéro</span>
-                          )}
+                          <div className="flex items-center gap-2 justify-end">
+                            {isReminderTarget(u) && (
+                              <button
+                                onClick={() => handleSendReminder(u)}
+                                disabled={sendingReminderTo === u.uid}
+                                className="inline-flex items-center gap-2 px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 font-bold text-xs rounded-xl transition-all border border-blue-500/20 disabled:opacity-50"
+                                title="Envoyer un rappel de renouvellement par WhatsApp"
+                              >
+                                {sendingReminderTo === u.uid ? (
+                                  <div className="w-3 h-3 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin"></div>
+                                ) : (
+                                  <IconChat />
+                                )}
+                                Rappel
+                              </button>
+                            )}
+                            {u.phone ? (
+                              <a href={`https://wa.me/${u.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] font-bold text-xs rounded-xl transition-all border border-[#25D366]/20 hover:scale-105">
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                                Contacter
+                              </a>
+                            ) : (
+                              <span className="text-slate-600 text-xs italic">Aucun numéro</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -848,7 +947,6 @@ export default function AdminDashboardPage() {
             <div className="bg-[#0F172A] border border-slate-800 rounded-3xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
               <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] h-[calc(100vh-220px)] min-h-[500px]">
                 
-                {/* Liste des conversations */}
                 <div className={`border-r border-slate-800 flex-col bg-slate-950/30 ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
                   <div className="p-5 border-b border-slate-800">
                     <h3 className="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2">
@@ -896,16 +994,11 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
 
-                {/* Fenêtre de conversation */}
                 <div className={`flex-col bg-slate-900/20 ${selectedChatId ? 'flex' : 'hidden md:flex'}`}>
                   {selectedChatId ? (
                     <>
                       <div className="p-4 md:p-5 border-b border-slate-800 flex items-center gap-3 bg-slate-900/50">
-                        {/* Bouton retour (mobile uniquement) */}
-                        <button 
-                          onClick={() => setSelectedChatId(null)} 
-                          className="md:hidden p-1 text-slate-400 hover:text-white shrink-0"
-                        >
+                        <button onClick={() => setSelectedChatId(null)} className="md:hidden p-1 text-slate-400 hover:text-white shrink-0">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                         </button>
                         <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shrink-0">

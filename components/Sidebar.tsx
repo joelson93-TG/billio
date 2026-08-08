@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "@/firebase"; // Ajustez ce chemin selon votre projet
+import { useRouter } from "next/navigation";
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
 
   // Vérification de l'administrateur à la connexion
@@ -22,12 +24,23 @@ export default function Sidebar() {
     return () => unsubscribe();
   }, []);
 
+  // Déconnexion propre (Firebase + redirection)
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Erreur lors de la déconnexion :", error);
+    } finally {
+      router.push("/login");
+    }
+  };
+
   // Liste des menus avec "Centre d'aide" à la toute fin
   const navItems = [
     {
       name: "Tableau de bord",
       fullName: "Tableau de bord",
-      href: "/",
+      href: "/dashboard",
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -106,7 +119,7 @@ export default function Sidebar() {
         <ul className="flex flex-row items-center space-x-1 sm:space-x-2 
                        md:flex-col md:justify-start md:space-x-0 md:space-y-1.5 md:px-3 md:py-6 md:w-full min-w-max md:min-w-0">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
+            const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname?.startsWith(item.href));
             
             return (
               <li key={item.href} className="md:w-full">
@@ -159,10 +172,10 @@ export default function Sidebar() {
         )}
 
         {/* Bouton Déconnexion en rouge vif */}
-        <Link 
-          href="/login" 
+        <button
+          onClick={handleLogout}
           title="Déconnexion"
-          className="flex items-center justify-center p-2.5 rounded-xl transition-all duration-200 group
+          className="flex items-center justify-center p-2.5 rounded-xl transition-all duration-200 group cursor-pointer
                      md:flex-row md:justify-start md:gap-3 md:px-4 md:py-3 md:text-sm md:font-medium
                      text-red-500 hover:text-red-400 hover:bg-red-500/10"
         >
@@ -172,7 +185,7 @@ export default function Sidebar() {
           <span className="hidden md:inline leading-tight truncate text-left">
             Déconnexion
           </span>
-        </Link>
+        </button>
 
       </div>
     </aside>

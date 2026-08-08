@@ -32,34 +32,60 @@ function ChatBubble() {
 
   useEffect(() => {
     setMounted(true);
+
+    // ⭐ Références mutables pour pouvoir couper les listeners à tout moment
+    let unsubChat = () => {};
+    let unsubDocListener = () => {};
+
     const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
+      // ⭐ On coupe TOUJOURS les anciens listeners avant d'en recréer / de partir
+      unsubChat();
+      unsubDocListener();
+
       setUser(currentUser);
+
       if (currentUser) {
         // Écoute des messages de la conversation
         const q = query(
           collection(db, "chats", currentUser.uid, "messages"),
           orderBy("timestamp", "asc")
         );
-        const unsubChat = onSnapshot(q, (snapshot) => {
-          const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setMessages(msgs);
-          setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-        });
+        unsubChat = onSnapshot(
+          q,
+          (snapshot) => {
+            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setMessages(msgs);
+            setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+          },
+          (error) => {
+            console.warn("Listener messages arrêté :", error.message);
+          }
+        );
 
         // Écoute du document parent pour le compteur de messages non lus (réponses admin)
-        const unsubDoc = onSnapshot(doc(db, "chats", currentUser.uid), (docSnap) => {
-          if (docSnap.exists()) {
-            setUnreadCount(docSnap.data().unreadByUser || 0);
+        unsubDocListener = onSnapshot(
+          doc(db, "chats", currentUser.uid),
+          (docSnap) => {
+            if (docSnap.exists()) {
+              setUnreadCount(docSnap.data().unreadByUser || 0);
+            }
+          },
+          (error) => {
+            console.warn("Listener chat doc arrêté :", error.message);
           }
-        });
-
-        return () => {
-          unsubChat();
-          unsubDoc();
-        };
+        );
+      } else {
+        // Utilisateur déconnecté : on réinitialise l'état local
+        setMessages([]);
+        setUnreadCount(0);
       }
     });
-    return () => unsubAuth();
+
+    return () => {
+      unsubAuth();
+      unsubChat();
+      unsubDocListener();
+    };
   }, []);
 
   // Remet à zéro le compteur non-lu quand l'utilisateur ouvre le chat

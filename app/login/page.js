@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
-import { auth } from "../../firebase"; 
+import { auth } from "@/firebase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -22,7 +22,7 @@ export default function LoginPage() {
     setMessage("");
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push("/");
+      router.push("/dashboard");
     } catch (err) {
       setError("Identifiants incorrects. Veuillez réessayer.");
       setIsLoading(false);
@@ -87,7 +87,7 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-5 mt-8">
             
-            {/* Champ Email Corrigé */}
+            {/* Champ Email */}
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm font-semibold text-gray-700">
                 Email professionnel
@@ -113,7 +113,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Champ Mot de Passe Corrigé */}
+            {/* Champ Mot de Passe */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label htmlFor="password" className="block text-sm font-semibold text-gray-700">
