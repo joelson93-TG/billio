@@ -6,8 +6,6 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/firebase";
 
-// 🆕 Gère aussi bien une string ISO qu'un Timestamp Firestore (robustesse,
-// alignée avec computeDaysLeft() utilisé côté dashboard admin).
 const getDaysRemaining = (endDateValue) => {
   if (!endDateValue) return 0;
   const endDate = endDateValue?.toDate ? endDateValue.toDate() : new Date(endDateValue);
@@ -17,7 +15,6 @@ const getDaysRemaining = (endDateValue) => {
   return diffDays > 0 ? diffDays : 0;
 };
 
-// 🆕 Traduit l'identifiant technique du plan (écrit par le webhook) en libellé lisible
 const planLabel = (planId) => {
   switch (planId) {
     case "1year":
@@ -37,7 +34,7 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingStamp, setIsUploadingStamp] = useState(false);
-  const [isPaymentPending, setIsPaymentPending] = useState(false); // ✅ Nouvel état
+  const [isPaymentPending, setIsPaymentPending] = useState(false);
 
   const [pricing, setPricing] = useState({
     monthly: 5000,
@@ -45,7 +42,6 @@ export default function SettingsPage() {
     yearly: 50000,
   });
 
-  // Champs de configuration
   const [companyName, setCompanyName] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [website, setWebsite] = useState("");
@@ -58,16 +54,14 @@ export default function SettingsPage() {
   const [cnss, setCnss] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#2563eb");
 
-  // 🆕 UNE SEULE IMAGE : Cachet + Signature combinés
   const [stampSignatureUrl, setStampSignatureUrl] = useState("");
 
   const [subscription, setSubscription] = useState({
     status: "trial",
     endDate: null,
-    plan: null, // 🆕 Plan actif renvoyé par le webhook ("1month" | "6months" | "1year" | null)
+    plan: null,
   });
 
-  // ✅ Ref pour détecter le changement de date via le webhook (anti-doublon d'alerte)
   const previousEndDateRef = useRef(null);
   const previousPlanRef = useRef(null);
 
@@ -154,13 +148,12 @@ export default function SettingsPage() {
               userData.subscription?.status ||
               "trial";
 
-            // 🆕 Lecture du plan actif écrit par le webhook (champ racine
-            // prioritaire, avec fallback sur subscription.plan)
-            const activePlan = userData.plan || userData.subscription?.plan || null;
+            const activePlan =
+              userData.plan ||
+              userData.subscription?.plan ||
+              userData.lastPaymentPlan ||
+              null;
 
-            // ✅ Détection automatique de l'activation par le webhook
-            // 🆕 On détecte aussi bien un changement de date qu'un changement de plan
-            // (cas d'un renouvellement le même jour où la date ne bouge pas visuellement)
             const hasChanged =
               previousEndDateRef.current !== endDate ||
               previousPlanRef.current !== activePlan;
@@ -191,7 +184,6 @@ export default function SettingsPage() {
     };
   }, [router, isPaymentPending]);
 
-  // Fonction générique de traitement d'image avec suppression de fond
   const processImage = (file, callback, maxWidth = 400, maxHeight = 400, setUploading = null) => {
     if (!file) return;
 
@@ -291,7 +283,6 @@ export default function SettingsPage() {
     }
   };
 
-  // ✅ FONCTION SÉCURISÉE : plus AUCUNE écriture Firestore côté client
   const handlePaymentClick = (plan) => {
     if (typeof window === "undefined" || !window.FedaPay) {
       alert(
@@ -305,15 +296,22 @@ export default function SettingsPage() {
       return;
     }
 
+    // 🆕 Sécurité supplémentaire : on s'assure que l'utilisateur est bien identifié
+    // avant de lancer un paiement (évite un userId undefined dans les metadata).
+    if (!currentUser?.uid) {
+      alert("Session utilisateur introuvable. Veuillez vous reconnecter avant de payer.");
+      return;
+    }
+
     try {
       const handler = window.FedaPay.init({
         public_key: "pk_live_Mw6qp4n5H1AhgzOOYp1XZFWh",
         transaction: {
           amount: plan.price,
           description: `Abonnement Billio - ${plan.duration}`,
-          // 🆕 Ces clés doivent impérativement correspondre à ce que lit le webhook
-          // (metadata.userId, metadata.planId, metadata.months) — ne pas renommer
-          // sans adapter également /api/webhook/route.js
+          // ⚠️ Ces clés doivent correspondre exactement à ce que lit le webhook
+          // (custom_metadata.userId, .planId, .months) — ne pas renommer sans
+          // adapter également /api/webhook/route.js
           custom_metadata: {
             userId: currentUser.uid,
             planId: plan.id,
@@ -321,7 +319,14 @@ export default function SettingsPage() {
           },
         },
         customer: {
-          email: email || currentUser?.email || "client@jblessconsulting.com",
+          // 🔧 CORRECTION : on utilise TOUJOURS l'email du compte Firebase
+          // réellement connecté (currentUser.email), jamais le champ "email"
+          // du profil entreprise. Ce dernier est un champ de contact client
+          // libre, qui peut contenir n'importe quelle valeur non liée au
+          // compte utilisé — ce qui causait l'affichage d'un email figé/erroné
+          // dans le formulaire FedaPay et faussait le fallback de recherche
+          // du webhook en cas d'échec de l'identification par userId.
+          email: currentUser?.email || "client@jblessconsulting.com",
           firstname: companyName || "Client",
         },
         onComplete: (response) => {
@@ -335,8 +340,6 @@ export default function SettingsPage() {
             return;
           }
 
-          // ✅ On NE MET PLUS À JOUR Firestore ici (sécurité).
-          // C'est le webhook serveur (/api/webhook) qui valide et active l'abonnement.
           setIsPaymentPending(true);
           alert(
             "✅ Paiement reçu ! Votre abonnement sera activé automatiquement dans quelques instants..."
@@ -369,7 +372,6 @@ export default function SettingsPage() {
     backgroundPosition: `0 0, 0 6px, 6px -6px, -6px 0px`,
   };
 
-  // 🆕 Libellé du plan actif pour l'affichage dans la bannière
   const activePlanLabel = planLabel(subscription.plan);
 
   return (
@@ -407,7 +409,14 @@ export default function SettingsPage() {
               </p>
             </div>
 
-            {/* ✅ Bannière de paiement en cours */}
+            {/* 🆕 Info debug visible : montre l'email réellement utilisé pour le paiement */}
+            <div className="mb-3 p-2.5 bg-slate-800/60 border border-slate-700 rounded-lg">
+              <p className="text-[10px] text-slate-400">
+                Paiement identifié avec le compte :{" "}
+                <span className="font-bold text-slate-200">{currentUser?.email}</span>
+              </p>
+            </div>
+
             {isPaymentPending && (
               <div className="mb-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center gap-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-400"></div>
@@ -682,7 +691,10 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Email
+                  Email{" "}
+                  <span className="font-normal text-gray-400">
+                    (contact entreprise — n'affecte pas le paiement)
+                  </span>
                 </label>
                 <input
                   type="email"
