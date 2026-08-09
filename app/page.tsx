@@ -20,6 +20,17 @@ function formatPrice(price: number): string {
   return price.toLocaleString("fr-FR");
 }
 
+/**
+ * Calcule un nombre "d'entrepreneurs ayant rejoint ce mois-ci"
+ * qui varie automatiquement chaque mois (base 1350, cycle sur 12 mois).
+ */
+function getMonthlyEntrepreneurCount(): number {
+  const now = new Date();
+  const monthIndex = now.getFullYear() * 12 + now.getMonth();
+  const variation = (monthIndex % 12) * 45; // étale la variation sur 12 mois
+  return 1350 + variation;
+}
+
 /* =========================================================
    ICÔNES SVG (remplacent material-symbols-outlined)
    ========================================================= */
@@ -286,10 +297,10 @@ function Modal({
    ========================================================= */
 const testimonials = [
   {
-    name: "Koffi Mensah",
-    role: "Consultant indépendant",
+    name: "HONMINOU Komlan Messah Parfait",
+    role: "Fondateur de \"OBube Ink\" (entreprise sérigraphique)",
     location: "Lomé, Togo",
-    initials: "KM",
+    initials: "HP",
     text: "Avec Billio, je crée mes factures en moins de 2 minutes. Fini les erreurs de calcul de TVA, mes clients trouvent enfin mes documents professionnels.",
   },
   {
@@ -327,6 +338,13 @@ export default function LandingPage() {
   const [activeModal, setActiveModal] = useState<
     null | "mentions" | "securite" | "contact"
   >(null);
+  const [monthlyCount, setMonthlyCount] = useState<number>(1350);
+
+  // Nombre d'entrepreneurs affiché dans le badge, recalculé côté client
+  // pour éviter tout souci d'hydratation SSR/CSR lié à la date.
+  useEffect(() => {
+    setMonthlyCount(getMonthlyEntrepreneurCount());
+  }, []);
 
   // Firestore : écoute en temps réel du pricing
   useEffect(() => {
@@ -431,7 +449,7 @@ export default function LandingPage() {
   return (
     <div
       className="landing-page bg-white text-[#191c1e] overflow-x-hidden selection:bg-[#e3dfff] selection:text-[#100069]"
-      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", zoom: 0.8 } as React.CSSProperties}
     >
       {/* Navigation */}
       <nav className="absolute top-0 w-full z-50 bg-transparent py-6">
@@ -646,13 +664,25 @@ export default function LandingPage() {
         </div>
 
         <div className="max-w-4xl mx-auto z-10 fade-up relative mt-10">
-          <div className="inline-flex items-center gap-3 px-6 py-3 mb-8 rounded-full bg-[#f2f4f6]/50 border border-[#c8c5d0]/20 backdrop-blur-sm shadow-md hover:shadow-lg transition-all duration-300">
-            <img
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDgPXMU2tAVTMiiN6lv-Eqjs5mbJLv7w_YFf3PBodoGInIJf8Ww5VxR2oVKR_pJfpF0TgdWukNJfYd2yJ6waK2Mwo6zy7JPo1zilLvM32gItOihVIBIf3S64bZHzQqjFd8rc2XPHBy4yMYTIoF3ugxMK0XQWUk04pVkki33CDiS4HSWGp2ZGhXJWgZv221tQx_ees8x9CWjAj034Le_JCgKI0GIdBxu7-o4ocMltV2ZzuvsD9O6v64rfMbtCBi75D5vf50"
-              alt="Social Proof"
-              className="h-10 w-auto object-contain"
-            />
+          {/* Badge social proof — désormais du vrai HTML lisible et dynamique */}
+          <div className="inline-flex items-center gap-3 px-5 py-2.5 mb-8 rounded-full bg-white border border-[#e0e3e5] shadow-md hover:shadow-lg transition-all duration-300">
+            <div className="flex -space-x-2">
+              <div className="w-7 h-7 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
+                JD
+              </div>
+              <div className="w-7 h-7 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
+                FG
+              </div>
+            </div>
+            <span className="text-sm font-medium text-[#191c1e]">
+              Rejoint par{" "}
+              <strong className="text-[#070235] font-bold">
+                +{formatPrice(monthlyCount)}
+              </strong>{" "}
+              entrepreneurs ce mois-ci
+            </span>
           </div>
+
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter leading-[1.1] md:leading-[1.05] text-[#070235] mb-6">
             <span className="text-[#070235]">
               Dites adieu aux factures sur
@@ -1133,7 +1163,7 @@ export default function LandingPage() {
                   &laquo; {t.text} &raquo;
                 </p>
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-[#1e1b4b] flex items-center justify-center text-white font-bold">
+                  <div className="w-12 h-12 rounded-full bg-[#1e1b4b] flex items-center justify-center text-white font-bold shrink-0">
                     {t.initials}
                   </div>
                   <div className="text-left">
@@ -1168,6 +1198,7 @@ export default function LandingPage() {
             <div className="relative w-full bg-black" style={{ paddingTop: "56.25%" }}>
               {tutorial?.embedUrl ? (
                 <iframe
+                  key={tutorial.embedUrl}
                   src={tutorial.embedUrl}
                   title={tutorial.title}
                   className="absolute inset-0 w-full h-full"
