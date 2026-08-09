@@ -9,6 +9,8 @@ import { auth, db } from "@/firebase";
 
 import { useSubscription } from "@/components/SubscriptionProvider";
 
+type PeriodType = "all" | "today" | "7d" | "30d" | "month" | "custom";
+
 export default function DashboardPage() {
   const [user, setUser] = useState<any | null>(null);
   const [businessData, setBusinessData] = useState<any | null>(null);
@@ -29,6 +31,11 @@ export default function DashboardPage() {
   const todayStr = new Date().toISOString().split('T')[0];
   const [reportStart, setReportStart] = useState<string>(todayStr);
   const [reportEnd, setReportEnd] = useState<string>(todayStr);
+
+  // ⭐ NOUVEAU : Filtre de période global pour tout le dashboard (compact)
+  const [filterPeriodType, setFilterPeriodType] = useState<PeriodType>("all");
+  const [filterStartDate, setFilterStartDate] = useState<string>("");
+  const [filterEndDate, setFilterEndDate] = useState<string>("");
 
   // Horloge en temps réel (date + heure du jour)
   const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
@@ -150,12 +157,76 @@ export default function DashboardPage() {
     return diffDays > 30;
   };
 
-  const overdueInvoices = invoices.filter((inv: any) => isOverdue30Days(inv));
-  const pendingInvoices = invoices.filter((inv: any) => isPending(getStatus(inv)));
+  // ⭐ NOUVEAU : Fonction de filtrage par période
+  const isInDateRange = (inv: any): boolean => {
+    if (!filterStartDate && !filterEndDate) return true;
+    const d = new Date(inv.date || inv.createdAt || Date.now());
+
+    if (filterStartDate) {
+      const start = new Date(filterStartDate);
+      start.setHours(0, 0, 0, 0);
+      if (d < start) return false;
+    }
+    if (filterEndDate) {
+      const end = new Date(filterEndDate);
+      end.setHours(23, 59, 59, 999);
+      if (d > end) return false;
+    }
+    return true;
+  };
+
+  // ⭐ NOUVEAU : Gestion compacte du filtre via menu déroulant
+  const handlePeriodTypeChange = (type: PeriodType) => {
+    setFilterPeriodType(type);
+
+    if (type === "all") {
+      setFilterStartDate("");
+      setFilterEndDate("");
+      return;
+    }
+    if (type === "custom") {
+      // On laisse l'utilisateur choisir manuellement les dates, sans les réinitialiser
+      return;
+    }
+
+    const now = new Date();
+    const end = now.toISOString().split('T')[0];
+    let start = new Date();
+
+    if (type === "today") {
+      start = now;
+    } else if (type === "7d") {
+      start.setDate(now.getDate() - 6);
+    } else if (type === "30d") {
+      start.setDate(now.getDate() - 29);
+    } else if (type === "month") {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    setFilterStartDate(start.toISOString().split('T')[0]);
+    setFilterEndDate(end);
+  };
+
+  const isFilterActive = Boolean(filterStartDate || filterEndDate);
+
+  const periodLabel = (() => {
+    if (!isFilterActive) return "";
+    const startLabel = filterStartDate ? new Date(filterStartDate).toLocaleDateString('fr-FR') : "";
+    const endLabel = filterEndDate ? new Date(filterEndDate).toLocaleDateString('fr-FR') : "";
+    if (startLabel && endLabel) return `${startLabel} → ${endLabel}`;
+    return startLabel || endLabel;
+  })();
+
+  // ⭐ NOUVEAU : Données filtrées par la période sélectionnée (utilisées partout dans le dashboard)
+  const filteredInvoices = invoices.filter(isInDateRange);
+  const filteredProformas = proformas.filter(isInDateRange);
+
+  const overdueInvoices = filteredInvoices.filter((inv: any) => isOverdue30Days(inv));
+  const pendingInvoices = filteredInvoices.filter((inv: any) => isPending(getStatus(inv)));
   
   const totalPending = pendingInvoices.reduce((sum: number, inv: any) => sum + getRemainingAmount(inv), 0);
   
-  const totalRevenue = invoices.reduce((sum: number, inv: any) => {
+  const totalRevenue = filteredInvoices.reduce((sum: number, inv: any) => {
     const status = getStatus(inv);
     if (isPaid(status) || isPartialPayment(status)) {
       return sum + getCollectedAmount(inv);
@@ -170,7 +241,7 @@ export default function DashboardPage() {
   let caCurrentMonth = 0; let caLastMonth = 0;
   let pendingCurrentMonth = 0; let pendingLastMonth = 0;
 
-  invoices.forEach((inv: any) => {
+  filteredInvoices.forEach((inv: any) => {
     const d = new Date(inv.date || inv.createdAt || Date.now());
     const isCurrentMonth = d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     const isLastMonth = (currentMonth === 0 ? d.getMonth() === 11 && d.getFullYear() === currentYear - 1 : d.getMonth() === currentMonth - 1 && d.getFullYear() === currentYear);
@@ -199,7 +270,7 @@ export default function DashboardPage() {
       data[monthKey] = { mois: monthKey, revenus: 0, attente: 0 };
     }
 
-    invoices.forEach((inv: any) => {
+    filteredInvoices.forEach((inv: any) => {
       const d = new Date(inv.date || inv.createdAt || Date.now());
       const monthKey = d.toLocaleString('fr-FR', { month: 'short' });
       if (data[monthKey]) {
@@ -220,18 +291,25 @@ export default function DashboardPage() {
     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(amount).replace('XOF', 'F CFA');
   };
 
+  const handleOpenReportModal = () => {
+    // Pré-remplir le rapport avec le filtre du dashboard s'il est actif
+    if (filterStartDate) setReportStart(filterStartDate);
+    if (filterEndDate) setReportEnd(filterEndDate);
+    setIsModalOpen(true);
+  };
+
   const handleGenerateReport = () => {
     const startDateObj = new Date(reportStart); startDateObj.setHours(0, 0, 0, 0);
     const endDateObj = new Date(reportEnd); endDateObj.setHours(23, 59, 59, 999);
 
-    const filteredInvoices = invoices.filter((inv: any) => {
+    const filteredForReport = invoices.filter((inv: any) => {
       const invDate = new Date(inv.date || inv.createdAt || Date.now());
       const status = getStatus(inv);
       const isValidStatus = isPaid(status) || isPartialPayment(status);
       return isValidStatus && invDate >= startDateObj && invDate <= endDateObj;
     });
 
-    const totalAmount = filteredInvoices.reduce((sum: number, inv: any) => sum + getCollectedAmount(inv), 0);
+    const totalAmount = filteredForReport.reduce((sum: number, inv: any) => sum + getCollectedAmount(inv), 0);
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -285,7 +363,7 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              ${filteredInvoices.length > 0 ? filteredInvoices.map((inv: any) => {
+              ${filteredForReport.length > 0 ? filteredForReport.map((inv: any) => {
                 const status = getStatus(inv);
                 const isPartial = isPartialPayment(status);
                 const collected = getCollectedAmount(inv);
@@ -325,7 +403,7 @@ export default function DashboardPage() {
     );
   }
 
-  const recentDocuments = activeRecentTab === "invoices" ? invoices : proformas;
+  const recentDocuments = activeRecentTab === "invoices" ? filteredInvoices : filteredProformas;
 
   return (
     <div className="min-h-screen bg-gray-50/50 font-sans text-gray-900 pb-32 md:pb-12 relative">
@@ -413,7 +491,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
             <button 
-              onClick={() => setIsModalOpen(true)} 
+              onClick={handleOpenReportModal} 
               className="w-full sm:w-auto text-center px-5 py-4 sm:py-3.5 bg-white text-gray-700 border border-gray-200 text-base sm:text-sm font-bold rounded-xl hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
             >
               <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
@@ -428,11 +506,63 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* ⭐ NOUVEAU : BARRE DE FILTRE PAR PÉRIODE (COMPACTE) */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 md:px-5 py-3.5 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+            <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            Période
+          </div>
+
+          <select
+            value={filterPeriodType}
+            onChange={(e) => handlePeriodTypeChange(e.target.value as PeriodType)}
+            className="text-xs font-bold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl px-3 py-2.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-600 transition-colors"
+          >
+            <option value="all">Toutes les données</option>
+            <option value="today">Aujourd'hui</option>
+            <option value="7d">7 derniers jours</option>
+            <option value="30d">30 derniers jours</option>
+            <option value="month">Ce mois</option>
+            <option value="custom">Période personnalisée</option>
+          </select>
+
+          {filterPeriodType === "custom" && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input 
+                type="date" 
+                value={filterStartDate} 
+                onChange={(e) => setFilterStartDate(e.target.value)} 
+                className="text-xs font-medium py-2.5 px-3 border border-gray-200 rounded-xl bg-gray-50/50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all" 
+              />
+              <span className="text-gray-400 text-xs font-bold">à</span>
+              <input 
+                type="date" 
+                value={filterEndDate} 
+                onChange={(e) => setFilterEndDate(e.target.value)} 
+                className="text-xs font-medium py-2.5 px-3 border border-gray-200 rounded-xl bg-gray-50/50 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all" 
+              />
+            </div>
+          )}
+
+          {isFilterActive && (
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg whitespace-nowrap">{periodLabel}</span>
+              <button 
+                onClick={() => handlePeriodTypeChange("all")} 
+                className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer p-1"
+                title="Réinitialiser le filtre"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* CARTES KPI */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
           <div className="group bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col justify-between min-w-0">
             <div className="flex justify-between items-start mb-4 gap-2">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Chiffre d'affaires (Total)</span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Chiffre d'affaires {isFilterActive ? '(Période)' : '(Total)'}</span>
               <div className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg whitespace-nowrap flex-shrink-0 ${caVariation >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'}`}>
                 {caVariation >= 0 ? '↑' : '↓'} {Math.abs(caVariation).toFixed(1)}%
               </div>

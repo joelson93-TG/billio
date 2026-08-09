@@ -22,6 +22,7 @@ const IconChat = () => <svg className="w-5 h-5" fill="none" stroke="currentColor
 const IconSend = () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/></svg>;
 const IconMenu = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>;
 const IconClose = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
+const IconRefresh = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>;
 
 const formatChatTime = (timestamp) => {
   if (!timestamp?.toDate) return "...";
@@ -42,10 +43,7 @@ const computeDaysLeft = (userData) => {
   return typeof sub.daysLeft === "number" ? sub.daysLeft : 30;
 };
 
-// 🆕 Résout le plan de l'utilisateur en cherchant dans plusieurs emplacements possibles.
-// Si aucun plan explicite n'est trouvé mais que l'abonnement est actif,
-// on retombe sur "1month" par défaut au lieu de "Essai" (sinon le graphique
-// "Popularité des Formules" ne comptabilise jamais ces abonnés actifs).
+// Résout le plan de l'utilisateur en cherchant dans plusieurs emplacements possibles.
 const resolvePlan = (userData, sub, computedStatus) => {
   const plan =
     sub.plan ||
@@ -68,6 +66,7 @@ export default function AdminDashboardPage() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState(null); // 🆕 Indicateur visuel de synchronisation temps réel
 
   // Rappels WhatsApp (AfriMsg)
   const [sendingReminderTo, setSendingReminderTo] = useState(null);
@@ -79,6 +78,14 @@ export default function AdminDashboardPage() {
 
   const [usersList, setUsersList] = useState([]);
   const [pricing, setPricing] = useState({ monthly: 12000, sixMonths: 60000, yearly: 100000 });
+
+  // 🆕 Ref pour toujours accéder à la valeur la plus récente de "pricing" à l'intérieur
+  // du listener temps réel des utilisateurs, sans provoquer de re-abonnement inutile
+  // (évite le problème de "closure figée" avec useEffect).
+  const pricingRef = useRef(pricing);
+  useEffect(() => {
+    pricingRef.current = pricing;
+  }, [pricing]);
 
   const [helpLinks, setHelpLinks] = useState({ whatsapp: "", facebook: "", tiktok: "", website: "" });
   const [tutorials, setTutorials] = useState([]);
@@ -93,15 +100,124 @@ export default function AdminDashboardPage() {
   const [totalUnreadMessages, setTotalUnreadMessages] = useState(0);
   const chatScrollRef = useRef(null);
 
+  // ── Authentification admin ──
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (!user) { router.push("/login"); return; }
       if (user.email !== "admin@jblessconsulting.com") { router.push("/"); return; }
       setIsAdminVerified(true);
-      await loadAdminData();
     });
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, [router]);
+
+  // 🆕 ── Grille tarifaire en TEMPS RÉEL (remplace l'ancien getDoc ponctuel) ──
+  useEffect(() => {
+    if (!isAdminVerified) return;
+    const pricingDocRef = doc(db, "config", "pricing");
+    const unsub = onSnapshot(pricingDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setPricing({
+          monthly: Number(data.monthly) || 12000,
+          sixMonths: Number(data.sixMonths) || 60000,
+          yearly: Number(data.yearly) || 100000,
+        });
+      }
+    });
+    return () => unsub();
+  }, [isAdminVerified]);
+
+  // 🆕 ── Utilisateurs & statistiques en TEMPS RÉEL ──
+  // C'est LA correction principale : avant, les utilisateurs étaient chargés une seule
+  // fois via getDocs() au montage de la page (dans l'ancienne fonction loadAdminData).
+  // Résultat : dès qu'un paiement était validé par le webhook, Firestore était bien mis
+  // à jour, mais le dashboard admin ne le savait jamais tant qu'on ne rechargeait pas
+  // complètement la page (F5). On utilise maintenant onSnapshot, exactement comme pour
+  // les conversations de chat, pour une mise à jour instantanée du CA, du nombre
+  // d'abonnés actifs, du graphique de répartition, etc.
+  useEffect(() => {
+    if (!isAdminVerified) return;
+
+    const usersCollRef = collection(db, "users");
+    const unsub = onSnapshot(
+      usersCollRef,
+      async (snapshot) => {
+        try {
+          let total = 0, active = 0, trial = 0, expired = 0, revenue = 0;
+          const currentPricing = pricingRef.current;
+
+          const loadedUsers = await Promise.all(
+            snapshot.docs.map(async (userDoc) => {
+              const userData = userDoc.data();
+              const sub = userData.subscription || {};
+
+              let companyData = {};
+              try {
+                const companySnap = await getDoc(doc(db, "users", userDoc.id, "settings", "company"));
+                companyData = companySnap.exists() ? companySnap.data() : {};
+              } catch (e) {
+                companyData = {};
+              }
+
+              const daysLeft = computeDaysLeft(userData);
+              let computedStatus = userData.subscriptionStatus || sub.status || "trial";
+              if (computedStatus !== "expired" && daysLeft <= 0) {
+                computedStatus = "expired";
+              }
+
+              const resolvedPlan = resolvePlan(userData, sub, computedStatus);
+
+              return {
+                uid: userDoc.id,
+                email: userData.email || companyData.email || "Non renseigné",
+                phone: companyData.phone || userData.phone || "",
+                companyName: companyData.companyName || userData.businessName || "Entreprise non configurée",
+                status: computedStatus,
+                plan: resolvedPlan,
+                daysLeft,
+                totalPaid: userData.totalPaid || userData.lastPaymentAmount || 0,
+              };
+            })
+          );
+
+          loadedUsers.forEach((u) => {
+            total++;
+            if (u.status === "active") active++;
+            else if (u.status === "trial") trial++;
+            else expired++;
+
+            if (u.totalPaid > 0) {
+              revenue += u.totalPaid;
+            } else if (u.status === "active") {
+              if (u.plan === "1year") revenue += Number(currentPricing.yearly);
+              else if (u.plan === "6months") revenue += Number(currentPricing.sixMonths);
+              else revenue += Number(currentPricing.monthly);
+            }
+          });
+
+          setStats({ totalUsers: total, activeUsers: active, trialUsers: trial, expiredUsers: expired, totalRevenue: revenue });
+          setUsersList(loadedUsers);
+          setLastSyncAt(new Date());
+        } catch (error) {
+          console.error("Erreur traitement snapshot utilisateurs :", error);
+        } finally {
+          setIsLoading(false);
+        }
+      },
+      (error) => {
+        console.error("Erreur écoute utilisateurs :", error);
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, [isAdminVerified]);
+
+  // Chargement initial du centre d'aide (données peu volatiles, rechargées manuellement après chaque action)
+  useEffect(() => {
+    if (!isAdminVerified) return;
+    loadHelpCenterData();
+  }, [isAdminVerified]);
 
   useEffect(() => {
     if (!isAdminVerified) return;
@@ -148,80 +264,6 @@ export default function AdminDashboardPage() {
       console.error("Erreur envoi réponse :", error);
     } finally {
       setIsSendingReply(false);
-    }
-  };
-
-  const loadAdminData = async () => {
-    try {
-      setIsLoading(true);
-      
-      const pricingRef = doc(db, "config", "pricing");
-      const pricingSnap = await getDoc(pricingRef);
-      let currentPricing = { ...pricing };
-      
-      if (pricingSnap.exists()) {
-        currentPricing = { ...pricing, ...pricingSnap.data() };
-        setPricing(currentPricing);
-      }
-
-      const usersSnap = await getDocs(collection(db, "users"));
-      let total = 0, active = 0, trial = 0, expired = 0, revenue = 0;
-      const loadedUsers = [];
-
-      for (const userDoc of usersSnap.docs) {
-        total++;
-        const userData = userDoc.data();
-        const sub = userData.subscription || {};
-        const companySnap = await getDoc(doc(db, "users", userDoc.id, "settings", "company"));
-        const companyData = companySnap.exists() ? companySnap.data() : {};
-
-        const daysLeft = computeDaysLeft(userData);
-        let computedStatus = userData.subscriptionStatus || sub.status || "trial";
-        if (computedStatus !== "expired" && daysLeft <= 0) {
-          computedStatus = "expired";
-        }
-
-        if (computedStatus === "active") active++;
-        else if (computedStatus === "trial") trial++;
-        else expired++;
-
-        // 🆕 CA : priorité au montant réellement payé (cumulé via increment)
-        if (typeof userData.totalPaid === "number" && userData.totalPaid > 0) {
-          revenue += userData.totalPaid;
-        } else if (typeof userData.lastPaymentAmount === "number" && userData.lastPaymentAmount > 0) {
-          // Compatibilité avec anciens paiements enregistrés avant le correctif
-          revenue += userData.lastPaymentAmount;
-        } else if (computedStatus === "active") {
-          // Dernier recours : estimation si aucun montant n'a été enregistré
-          if (sub.plan === "1year") revenue += Number(currentPricing.yearly);
-          else if (sub.plan === "6months") revenue += Number(currentPricing.sixMonths);
-          else revenue += Number(currentPricing.monthly);
-        }
-
-        // 🆕 Détection robuste du plan (fixe le bug du graphique "Popularité des Formules")
-        const resolvedPlan = resolvePlan(userData, sub, computedStatus);
-
-        loadedUsers.push({
-          uid: userDoc.id,
-          email: userData.email || companyData.email || "Non renseigné",
-          phone: companyData.phone || userData.phone || "",
-          companyName: companyData.companyName || userData.businessName || "Entreprise non configurée",
-          status: computedStatus,
-          plan: resolvedPlan,
-          daysLeft: daysLeft,
-          totalPaid: userData.totalPaid || userData.lastPaymentAmount || 0,
-        });
-      }
-
-      setStats({ totalUsers: total, activeUsers: active, trialUsers: trial, expiredUsers: expired, totalRevenue: revenue });
-      setUsersList(loadedUsers);
-
-      await loadHelpCenterData();
-
-    } catch (error) {
-      console.error("Erreur chargement admin :", error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -320,15 +362,16 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     setIsSavingPricing(true);
     try {
-      const pricingRef = doc(db, "config", "pricing");
-      await setDoc(pricingRef, {
+      const pricingDocRef = doc(db, "config", "pricing");
+      await setDoc(pricingDocRef, {
         monthly: Number(pricing.monthly),
         sixMonths: Number(pricing.sixMonths),
         yearly: Number(pricing.yearly),
         updatedAt: new Date().toISOString(),
       }, { merge: true });
       alert("Grille tarifaire mise à jour avec succès !");
-      await loadAdminData();
+      // 🆕 Plus besoin de recharger manuellement : le listener onSnapshot sur
+      // "config/pricing" mettra automatiquement à jour l'état "pricing".
     } catch (error) {
       console.error("Erreur tarifs :", error);
     } finally {
@@ -489,7 +532,6 @@ export default function AdminDashboardPage() {
             <p className="text-xs font-bold text-slate-200 truncate mt-1">admin@jblessconsulting.com</p>
           </div>
           <div className="flex gap-3">
-            {/* 🆕 Correction : redirige vers le dashboard client, pas la landing page */}
             <button onClick={() => router.push("/dashboard")} className="flex-1 py-2.5 text-center text-xs font-bold bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors text-slate-300 border border-slate-700 hover:border-slate-600">App Client</button>
             <button onClick={handleLogout} className="py-2.5 px-4 text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-colors border border-red-500/10">Sortir</button>
           </div>
@@ -536,7 +578,6 @@ export default function AdminDashboardPage() {
                 <p className="text-xs font-bold text-slate-200 truncate mt-1">admin@jblessconsulting.com</p>
               </div>
               <div className="flex gap-3">
-                {/* 🆕 Correction : redirige vers le dashboard client, pas la landing page */}
                 <button onClick={() => router.push("/dashboard")} className="flex-1 py-2.5 text-center text-xs font-bold bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors text-slate-300 border border-slate-700 hover:border-slate-600">App Client</button>
                 <button onClick={handleLogout} className="py-2.5 px-4 text-xs font-bold bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-colors border border-red-500/10">Sortir</button>
               </div>
@@ -565,6 +606,14 @@ export default function AdminDashboardPage() {
               {activeTab === "messages" && <><span className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.8)] shrink-0"></span> <span className="truncate">Messagerie</span></>}
             </h1>
           </div>
+
+          {/* 🆕 Indicateur de synchronisation temps réel (rassure sur la fraîcheur des données) */}
+          {lastSyncAt && (
+            <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-slate-500 font-medium shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Synchronisé en temps réel
+            </div>
+          )}
         </header>
 
         <div className="p-4 md:p-10 space-y-8 md:space-y-10 max-w-7xl w-full mx-auto pb-20">

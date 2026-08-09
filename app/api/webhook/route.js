@@ -4,7 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 export const dynamic = 'force-dynamic';
 
-// 🆕 Parsing robuste de la clé privée : gère les \n littéraux ET les vrais
+// Parsing robuste de la clé privée : gère les \n littéraux ET les vrais
 // retours à la ligne, retire d'éventuels guillemets parasites, et valide
 // que le format PEM est correct avant d'initialiser Firebase Admin.
 function parsePrivateKey(rawKey) {
@@ -25,7 +25,6 @@ function parsePrivateKey(rawKey) {
 
   // Validation basique du format PEM
   if (!key.includes('-----BEGIN PRIVATE KEY-----') || !key.includes('-----END PRIVATE KEY-----')) {
-    console.error('❌ [WEBHOOK] Le format de FIREBASE_PRIVATE_KEY est invalide (balises PEM manquantes).');
     return null;
   }
 
@@ -40,27 +39,18 @@ function getAdminDb() {
       throw new Error('Variables Firebase Admin manquantes ou clé privée invalide.');
     }
 
-    console.log('🔥 [WEBHOOK] Project ID utilisé :', process.env.FIREBASE_PROJECT_ID);
-    console.log('🔑 [WEBHOOK] Client email utilisé :', process.env.FIREBASE_CLIENT_EMAIL);
-    console.log('🔑 [WEBHOOK] Clé privée : commence par', privateKey.substring(0, 30));
-
-    try {
-      initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey,
-        }),
-      });
-      console.log('✅ [WEBHOOK] Firebase Admin initialisé avec succès.');
-    } catch (err) {
-      console.error('💥 [WEBHOOK] Échec initialisation Firebase Admin :', err.message);
-      throw err;
-    }
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey,
+      }),
+    });
   }
   return getFirestore();
 }
 
+// Calcule la nouvelle date de fin en cumulant sur l'ancienne si encore active
 function computeNewEndDate(currentEndDateStr, months) {
   const now = new Date();
   const currentEndDate = currentEndDateStr ? new Date(currentEndDateStr) : now;
@@ -70,6 +60,7 @@ function computeNewEndDate(currentEndDateStr, months) {
   return newEndDate;
 }
 
+// Déduit le nombre de mois à partir du planId si les metadata ne le fournissent pas
 function resolveMonths(months, planId) {
   if (months) return Number(months);
   if (planId === '1year') return 12;
@@ -84,47 +75,49 @@ export async function POST(request) {
     const secret = url.searchParams.get('secret');
 
     if (process.env.FEDAPAY_WEBHOOK_SECRET && secret !== process.env.FEDAPAY_WEBHOOK_SECRET) {
-      console.warn('⚠️ [WEBHOOK] Secret invalide ou absent');
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
 
     const db = getAdminDb();
     const body = await request.json();
 
-    console.log('📩 [WEBHOOK] Événement reçu :', body.name || body.event);
-
     const eventName = body.name || body.event;
     const transactionData = body.entity || body.data || body;
 
+    // On ne traite QUE les paiements réellement approuvés
     if (eventName !== 'transaction.approved' && transactionData.status !== 'approved') {
-      console.log('ℹ️ [WEBHOOK] Événement ignoré (pending/created) :', eventName);
       return NextResponse.json({ success: true, message: 'Événement ignoré (en attente).' });
     }
 
     const transactionId = transactionData.id || transactionData.transaction_id;
     const amountPaid = Number(transactionData.amount) || 0;
+
+    // FedaPay renvoie DEUX objets metadata distincts :
+    //   - "metadata"        → infos internes FedaPay
+    //   - "custom_metadata" → nos données envoyées depuis le frontend (userId, planId, months)
     const customMetadata = transactionData.custom_metadata || {};
 
     const userId = customMetadata.userId;
     const planId = customMetadata.planId;
     const months = resolveMonths(customMetadata.months, planId);
 
-    const customerEmail = transactionData.customer?.email;
-
-    console.log('🔑 [WEBHOOK] Données extraites :', { 
-      userId, planId, months, customerEmail, transactionId, amountPaid 
-    });
-
     if (!userId) {
-      console.error('❌ [WEBHOOK] userId manquant dans custom_metadata');
       return NextResponse.json({ error: 'userId manquant' }, { status: 400 });
+    }
+
+    // Anti-doublon : on ignore si cette transaction a déjà été traitée
+    if (transactionId) {
+      const processedRef = db.collection('processedPayments').doc(String(transactionId));
+      const processedSnap = await processedRef.get();
+      if (processedSnap.exists) {
+        return NextResponse.json({ success: true, message: 'Transaction déjà traitée.' });
+      }
     }
 
     const userRef = db.collection('users').doc(userId);
     const userSnap = await userRef.get();
 
     if (!userSnap.exists) {
-      console.error('❌ [WEBHOOK] Document utilisateur non trouvé :', userId);
       return NextResponse.json({ error: 'Utilisateur non trouvé' }, { status: 404 });
     }
 
@@ -132,31 +125,50 @@ export async function POST(request) {
     const currentEndDate = userData.trialEndDate || userData.endDate || null;
     const newEndDate = computeNewEndDate(currentEndDate, months);
 
-    await userRef.set({
-      subscriptionStatus: 'active',
-      trialEndDate: newEndDate.toISOString(),
-      plan: planId,
-      subscription: {
-        plan: planId,
-        status: 'active',
-        expiresAt: newEndDate.toISOString(),
+    await userRef.set(
+      {
+        subscriptionStatus: 'active',
+        trialEndDate: newEndDate.toISOString(),
+
+        // Champ "plan" au niveau racine : lu en priorité par le dashboard admin
+        // et par la page settings client pour afficher le badge d'abonnement.
+        plan: planId || userData.plan || null,
+
+        subscription: {
+          plan: planId || userData?.subscription?.plan || null,
+          status: 'active',
+          expiresAt: newEndDate.toISOString(),
+        },
+
+        lastPaymentAmount: amountPaid,
+        lastPaymentPlan: planId || null,
+
+        // totalPaid cumulé via increment() : champ prioritaire utilisé par le
+        // dashboard admin pour calculer le Chiffre d'Affaires Généré.
+        totalPaid: FieldValue.increment(amountPaid),
+
+        updatedAt: new Date().toISOString(),
       },
-      lastPaymentAmount: amountPaid,
-      lastPaymentPlan: planId,
-      totalPaid: FieldValue.increment(amountPaid),
-      updatedAt: new Date().toISOString(),
-    }, { merge: true });
+      { merge: true }
+    );
 
-    console.log('✅ [WEBHOOK] Abonnement activé avec succès pour :', userId, '→', newEndDate.toISOString());
+    // Marquage anti-doublon pour les futurs webhooks
+    if (transactionId) {
+      await db.collection('processedPayments').doc(String(transactionId)).set({
+        userId: userRef.id,
+        amount: amountPaid,
+        plan: planId || null,
+        processedAt: new Date().toISOString(),
+      });
+    }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       message: 'Abonnement activé avec succès.',
-      newEndDate: newEndDate.toISOString()
+      newEndDate: newEndDate.toISOString(),
     });
-
   } catch (error) {
-    console.error('💥 [WEBHOOK] Erreur critique :', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Erreur webhook :', error);
+    return NextResponse.json({ error: error.message || 'Erreur interne du serveur.' }, { status: 500 });
   }
 }
