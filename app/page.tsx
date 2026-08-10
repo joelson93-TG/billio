@@ -300,6 +300,7 @@ const testimonials = [
     name: "HONMINOU Komlan Messah Parfait",
     role: "Fondateur de \"OBube Ink\" (entreprise sérigraphique)",
     location: "Lomé, Togo",
+    phone: "+228 93 59 17 96",
     initials: "HP",
     text: "Avec Billio, je crée mes factures en moins de 2 minutes. Fini les erreurs de calcul de TVA, mes clients trouvent enfin mes documents professionnels.",
   },
@@ -307,6 +308,7 @@ const testimonials = [
     name: "Aïcha Koné",
     role: "Fondatrice d'agence de communication",
     location: "Abidjan, Côte d'Ivoire",
+    phone: null,
     initials: "AK",
     text: "Le suivi des paiements en temps réel m'a changé la vie. Je sais enfin qui m'a payé et qui est en retard, sans avoir à courir après mes clients.",
   },
@@ -314,6 +316,7 @@ const testimonials = [
     name: "Fatou Diop",
     role: "Gérante de boutique en ligne",
     location: "Dakar, Sénégal",
+    phone: null,
     initials: "FD",
     text: "Simple, rapide et vraiment adapté à nos réalités africaines. J'ai pu personnaliser mes factures avec mon logo et ça donne un rendu très pro.",
   },
@@ -321,6 +324,7 @@ const testimonials = [
     name: "Yawa Adjovi",
     role: "Comptable freelance",
     location: "Lomé, Togo",
+    phone: null,
     initials: "YA",
     text: "La gestion automatique de la TVA et de la RSPS me fait gagner un temps fou avec mes clients. Je recommande Billio à tous les entrepreneurs.",
   },
@@ -341,7 +345,6 @@ export default function LandingPage() {
   const [monthlyCount, setMonthlyCount] = useState<number>(1350);
 
   // Nombre d'entrepreneurs affiché dans le badge, recalculé côté client
-  // pour éviter tout souci d'hydratation SSR/CSR lié à la date.
   useEffect(() => {
     setMonthlyCount(getMonthlyEntrepreneurCount());
   }, []);
@@ -664,7 +667,7 @@ export default function LandingPage() {
         </div>
 
         <div className="max-w-4xl mx-auto z-10 fade-up relative mt-10">
-          {/* Badge social proof — désormais du vrai HTML lisible et dynamique */}
+          {/* Badge social proof */}
           <div className="inline-flex items-center gap-3 px-5 py-2.5 mb-8 rounded-full bg-white border border-[#e0e3e5] shadow-md hover:shadow-lg transition-all duration-300">
             <div className="flex -space-x-2">
               <div className="w-7 h-7 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
@@ -683,11 +686,13 @@ export default function LandingPage() {
             </span>
           </div>
 
+          {/* IMPORTANT : le <br /> n'est plus masqué sur mobile,
+              afin que "Word et Excel." reste groupé comme sur desktop */}
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter leading-[1.1] md:leading-[1.05] text-[#070235] mb-6">
             <span className="text-[#070235]">
               Dites adieu aux factures sur
             </span>
-            <br className="hidden md:block" />
+            <br />
             <span className="text-[#4e45d5]">Word et Excel.</span>
           </h1>
           <p className="text-lg md:text-xl leading-[30px] text-[#47464f] mb-10 max-w-2xl mx-auto">
@@ -1173,6 +1178,15 @@ export default function LandingPage() {
                     <div className="text-xs text-[#47464f]">
                       {t.role} • {t.location}
                     </div>
+                    {t.phone && (
+                      <a
+                        href={`tel:${t.phone.replace(/\s/g, "")}`}
+                        className="flex items-center gap-1.5 mt-1 text-xs text-[#4e45d5] font-medium hover:underline"
+                      >
+                        <IconPhone className="w-3 h-3" />
+                        {t.phone}
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
