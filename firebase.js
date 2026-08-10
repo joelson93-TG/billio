@@ -2,6 +2,7 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, initializeAuth, browserLocalPersistence, inMemoryPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage"; // 🆕 AJOUT
 import { getAnalytics, isSupported } from "firebase/analytics";
 
 const firebaseConfig = {
@@ -42,6 +43,7 @@ const initializeFirebaseAuth = () => {
 // auth possède maintenant un type strict et Next.js validera le build
 const auth = initializeFirebaseAuth();
 const db = getFirestore(app);
+const storage = getStorage(app); // 🆕 AJOUT — Service Firebase Storage pour l'upload d'images
 
 let analytics = null;
 if (typeof window !== "undefined") {
@@ -54,4 +56,4 @@ if (typeof window !== "undefined") {
   });
 }
 
-export { app, auth, db, analytics };
+export { app, auth, db, storage, analytics }; // 🆕 storage exporté

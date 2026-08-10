@@ -16,6 +16,11 @@ interface TutorialData {
   title: string;
 }
 
+interface ScreenshotDoc {
+  url: string;
+  order?: number;
+}
+
 function formatPrice(price: number): string {
   return price.toLocaleString("fr-FR");
 }
@@ -30,6 +35,10 @@ function getMonthlyEntrepreneurCount(): number {
   const variation = (monthIndex % 12) * 45; // étale la variation sur 12 mois
   return 1350 + variation;
 }
+
+// Image de secours utilisée si aucune capture n'est présente sur Firestore
+const DEFAULT_DASHBOARD_IMAGE =
+  "https://lh3.googleusercontent.com/aida-public/AB6AXuDQjEYxYXGxCrnL5wSnV81SofvfkfpfBBW_FcW4-8qsxtTNCXxRt33u7iG8xPZ7yW6S19Z6o_1zDu03NP3emAQlaCvHswLvyMCxS3xlzcTKlqxJMIaufarHCGbJhPh4eYp0ZrgijBjBk-8IiJQKpDwcY9IM1RCcxJat6Fk-38_cMC1ZSDraMIswGbRBgJ9PAdkWspKbRx_CUhcCLZwmidsexf9pxOKhNlKMsChjRlb4gpE5riRW91rvSsquo8NgkQ06Sgw";
 
 /* =========================================================
    ICÔNES SVG (remplacent material-symbols-outlined)
@@ -251,6 +260,60 @@ function IconStar({ className = "" }: { className?: string }) {
 }
 
 /* =========================================================
+   CARROUSEL DASHBOARD — diaporama auto-défilant
+   ========================================================= */
+function DashboardCarousel({ images }: { images: string[] }) {
+  const [index, setIndex] = useState(0);
+
+  // Remet l'index à 0 si la liste d'images change (ex: mise à jour Firestore)
+  useEffect(() => {
+    setIndex(0);
+  }, [images.length]);
+
+  // Défilement automatique toutes les 4.5 secondes
+  useEffect(() => {
+    if (images.length <= 1) return;
+    const timer = setInterval(() => {
+      setIndex((prev) => (prev + 1) % images.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [images.length]);
+
+  return (
+    <div className="relative w-full aspect-[16/10] bg-[#f7f9fb] overflow-hidden">
+      {images.map((src, i) => (
+        <img
+          key={`${src}-${i}`}
+          src={src}
+          alt={`Aperçu du tableau de bord Billio ${i + 1}`}
+          className={`absolute inset-0 w-full h-full object-cover object-top transition-opacity duration-1000 ease-in-out ${
+            i === index ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      ))}
+
+      {/* Indicateurs (points) — cliquables, visibles uniquement s'il y a plusieurs images */}
+      {images.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
+          {images.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setIndex(i)}
+              aria-label={`Voir l'image ${i + 1}`}
+              className={`h-2 rounded-full transition-all duration-300 ${
+                i === index
+                  ? "w-6 bg-white shadow-md"
+                  : "w-2 bg-white/50 hover:bg-white/80"
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =========================================================
    MODALE réutilisable
    ========================================================= */
 function Modal({
@@ -338,6 +401,9 @@ export default function LandingPage() {
   });
 
   const [tutorial, setTutorial] = useState<TutorialData | null>(null);
+  const [dashboardImages, setDashboardImages] = useState<string[]>([
+    DEFAULT_DASHBOARD_IMAGE,
+  ]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<
     null | "mentions" | "securite" | "contact"
@@ -387,6 +453,37 @@ export default function LandingPage() {
       },
       (error) => {
         console.error("Erreur Firestore tutorials:", error);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // Firestore : écoute en temps réel des captures d'écran du dashboard
+  // (diaporama). Si la collection est vide ou inaccessible, on garde
+  // l'image par défaut (DEFAULT_DASHBOARD_IMAGE).
+  useEffect(() => {
+    const ref = collection(db, "screenshots");
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (!snap.empty) {
+          const imgs = snap.docs
+            .map((d) => {
+              const data = d.data() as ScreenshotDoc;
+              return { url: data.url, order: data.order ?? 0 };
+            })
+            .filter((item) => !!item.url)
+            .sort((a, b) => a.order - b.order)
+            .map((item) => item.url);
+
+          setDashboardImages(imgs.length > 0 ? imgs : [DEFAULT_DASHBOARD_IMAGE]);
+        } else {
+          setDashboardImages([DEFAULT_DASHBOARD_IMAGE]);
+        }
+      },
+      (error) => {
+        console.error("Erreur Firestore screenshots:", error);
+        setDashboardImages([DEFAULT_DASHBOARD_IMAGE]);
       }
     );
     return () => unsub();
@@ -686,8 +783,6 @@ export default function LandingPage() {
             </span>
           </div>
 
-          {/* IMPORTANT : le <br /> n'est plus masqué sur mobile,
-              afin que "Word et Excel." reste groupé comme sur desktop */}
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter leading-[1.1] md:leading-[1.05] text-[#070235] mb-6">
             <span className="text-[#070235]">
               Dites adieu aux factures sur
@@ -709,6 +804,7 @@ export default function LandingPage() {
           </div>
         </div>
 
+        {/* Aperçu du dashboard — désormais un diaporama Firestore */}
         <div className="w-full max-w-5xl mx-auto rounded-2xl overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.15)] border border-[#F1F5F9] fade-up z-10 relative transform md:-rotate-1 hover:rotate-0 transition-transform duration-700 bg-white">
           <div className="bg-[#f7f9fb] border-b border-[#F1F5F9] px-4 py-3 flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-red-400"></div>
@@ -718,11 +814,7 @@ export default function LandingPage() {
               billio.jblessconsulting.com
             </div>
           </div>
-          <img
-            alt="Billio Dashboard"
-            className="w-full h-auto object-cover block"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQjEYxYXGxCrnL5wSnV81SofvfkfpfBBW_FcW4-8qsxtTNCXxRt33u7iG8xPZ7yW6S19Z6o_1zDu03NP3emAQlaCvHswLvyMCxS3xlzcTKlqxJMIaufarHCGbJhPh4eYp0ZrgijBjBk-8IiJQKpDwcY9IM1RCcxJat6Fk-38_cMC1ZSDraMIswGbRBgJ9PAdkWspKbRx_CUhcCLZwmidsexf9pxOKhNlKMsChjRlb4gpE5riRW91rvSsquo8NgkQ06Sgw"
-          />
+          <DashboardCarousel images={dashboardImages} />
         </div>
       </section>
 

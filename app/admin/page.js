@@ -7,7 +7,10 @@ import {
   collection, getDocs, doc, getDoc, setDoc, addDoc, deleteDoc, updateDoc,
   query, orderBy, onSnapshot, serverTimestamp, increment
 } from "firebase/firestore";
-import { auth, db } from "@/firebase";
+import { 
+  ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject 
+} from "firebase/storage"; // 🆕 AJOUT
+import { auth, db, storage } from "@/firebase"; // 🆕 storage ajouté
 import { 
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid 
@@ -23,6 +26,11 @@ const IconSend = () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0
 const IconMenu = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>;
 const IconClose = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
 const IconRefresh = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>;
+const IconImage = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+const IconArrowUp = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>;
+const IconArrowDown = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>;
+// 🆕 Icône upload (zone de dépôt)
+const IconUploadCloud = () => <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>;
 
 const formatChatTime = (timestamp) => {
   if (!timestamp?.toDate) return "...";
@@ -66,7 +74,7 @@ export default function AdminDashboardPage() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [lastSyncAt, setLastSyncAt] = useState(null); // 🆕 Indicateur visuel de synchronisation temps réel
+  const [lastSyncAt, setLastSyncAt] = useState(null);
 
   // Rappels WhatsApp (AfriMsg)
   const [sendingReminderTo, setSendingReminderTo] = useState(null);
@@ -79,9 +87,6 @@ export default function AdminDashboardPage() {
   const [usersList, setUsersList] = useState([]);
   const [pricing, setPricing] = useState({ monthly: 12000, sixMonths: 60000, yearly: 100000 });
 
-  // 🆕 Ref pour toujours accéder à la valeur la plus récente de "pricing" à l'intérieur
-  // du listener temps réel des utilisateurs, sans provoquer de re-abonnement inutile
-  // (évite le problème de "closure figée" avec useEffect).
   const pricingRef = useRef(pricing);
   useEffect(() => {
     pricingRef.current = pricing;
@@ -91,6 +96,20 @@ export default function AdminDashboardPage() {
   const [tutorials, setTutorials] = useState([]);
   const [newTutorial, setNewTutorial] = useState({ title: "", embedUrl: "" });
   const [editingTutorial, setEditingTutorial] = useState(null);
+
+  // ── État du diaporama de la landing page (collection "screenshots") ──
+  const [screenshots, setScreenshots] = useState([]);
+  const [editingScreenshotId, setEditingScreenshotId] = useState(null);
+  const [editingScreenshotUrl, setEditingScreenshotUrl] = useState("");
+  const [isSavingScreenshotOrder, setIsSavingScreenshotOrder] = useState(false);
+
+  // 🆕 ── États pour l'upload direct vers Firebase Storage ──
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const [conversations, setConversations] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
@@ -110,7 +129,7 @@ export default function AdminDashboardPage() {
     return () => unsubscribeAuth();
   }, [router]);
 
-  // 🆕 ── Grille tarifaire en TEMPS RÉEL (remplace l'ancien getDoc ponctuel) ──
+  // ── Grille tarifaire en TEMPS RÉEL ──
   useEffect(() => {
     if (!isAdminVerified) return;
     const pricingDocRef = doc(db, "config", "pricing");
@@ -127,14 +146,23 @@ export default function AdminDashboardPage() {
     return () => unsub();
   }, [isAdminVerified]);
 
-  // 🆕 ── Utilisateurs & statistiques en TEMPS RÉEL ──
-  // C'est LA correction principale : avant, les utilisateurs étaient chargés une seule
-  // fois via getDocs() au montage de la page (dans l'ancienne fonction loadAdminData).
-  // Résultat : dès qu'un paiement était validé par le webhook, Firestore était bien mis
-  // à jour, mais le dashboard admin ne le savait jamais tant qu'on ne rechargeait pas
-  // complètement la page (F5). On utilise maintenant onSnapshot, exactement comme pour
-  // les conversations de chat, pour une mise à jour instantanée du CA, du nombre
-  // d'abonnés actifs, du graphique de répartition, etc.
+  // ── Diaporama Landing Page en TEMPS RÉEL (collection "screenshots") ──
+  useEffect(() => {
+    if (!isAdminVerified) return;
+    const q = query(collection(db, "screenshots"), orderBy("order", "asc"));
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        setScreenshots(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+      },
+      (error) => {
+        console.error("Erreur écoute screenshots :", error);
+      }
+    );
+    return () => unsub();
+  }, [isAdminVerified]);
+
+  // ── Utilisateurs & statistiques en TEMPS RÉEL ──
   useEffect(() => {
     if (!isAdminVerified) return;
 
@@ -213,7 +241,6 @@ export default function AdminDashboardPage() {
     return () => unsub();
   }, [isAdminVerified]);
 
-  // Chargement initial du centre d'aide (données peu volatiles, rechargées manuellement après chaque action)
   useEffect(() => {
     if (!isAdminVerified) return;
     loadHelpCenterData();
@@ -241,6 +268,13 @@ export default function AdminDashboardPage() {
     updateDoc(doc(db, "chats", selectedChatId), { unreadByAdmin: 0 }).catch(() => {});
     return () => unsub();
   }, [selectedChatId]);
+
+  // 🆕 Nettoyage de l'URL de prévisualisation (évite les fuites mémoire)
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const handleSendReply = async (e) => {
     e.preventDefault();
@@ -370,12 +404,174 @@ export default function AdminDashboardPage() {
         updatedAt: new Date().toISOString(),
       }, { merge: true });
       alert("Grille tarifaire mise à jour avec succès !");
-      // 🆕 Plus besoin de recharger manuellement : le listener onSnapshot sur
-      // "config/pricing" mettra automatiquement à jour l'état "pricing".
     } catch (error) {
       console.error("Erreur tarifs :", error);
     } finally {
       setIsSavingPricing(false);
+    }
+  };
+
+  // 🆕 ── Validation + sélection d'un fichier local (input ou drag & drop) ──
+  const validateAndSetFile = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Veuillez sélectionner un fichier image (PNG, JPG, WEBP...)");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert("L'image ne doit pas dépasser 5 Mo");
+      return;
+    }
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+  };
+
+  // 🆕 ── Sélection via l'input file classique ──
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    validateAndSetFile(file);
+  };
+
+  // 🆕 ── Support du glisser-déposer (drag & drop) ──
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const file = e.dataTransfer.files?.[0];
+    validateAndSetFile(file);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+  };
+
+  // 🆕 ── Annuler la sélection avant upload ──
+  const handleCancelSelection = () => {
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setUploadProgress(0);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // 🆕 ── Upload automatique vers Firebase Storage + sauvegarde Firestore ──
+  // 1. Upload du fichier dans Storage (bucket "screenshots/")
+  // 2. Récupération de l'URL de téléchargement permanente
+  // 3. Écriture du document Firestore avec cette URL + le chemin Storage
+  const handleUploadScreenshot = async () => {
+    if (!selectedFile) {
+      alert("Veuillez sélectionner une image");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const uniqueFileName = `${Date.now()}_${selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const fileStorageRef = storageRef(storage, `screenshots/${uniqueFileName}`);
+      const uploadTask = uploadBytesResumable(fileStorageRef, selectedFile);
+
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(Math.round(progress));
+        },
+        (error) => {
+          console.error("Erreur upload :", error);
+          alert("Erreur lors de l'upload de l'image");
+          setIsUploading(false);
+        },
+        async () => {
+          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          const maxOrder = screenshots.reduce((max, s) => Math.max(max, s.order ?? 0), -1);
+
+          await addDoc(collection(db, "screenshots"), {
+            url: downloadUrl,
+            storagePath: `screenshots/${uniqueFileName}`,
+            order: maxOrder + 1,
+            createdAt: serverTimestamp(),
+          });
+
+          handleCancelSelection();
+          setIsUploading(false);
+          alert("Image ajoutée au diaporama !");
+        }
+      );
+    } catch (error) {
+      console.error("Erreur ajout capture d'écran :", error);
+      alert("Erreur lors de l'ajout de l'image");
+      setIsUploading(false);
+    }
+  };
+
+  // ── Modifier l'URL d'une capture existante (édition manuelle, optionnelle) ──
+  const handleUpdateScreenshotUrl = async (e) => {
+    e.preventDefault();
+    if (!editingScreenshotId || !editingScreenshotUrl.trim()) return;
+    try {
+      await updateDoc(doc(db, "screenshots", editingScreenshotId), {
+        url: editingScreenshotUrl.trim(),
+        updatedAt: serverTimestamp(),
+      });
+      setEditingScreenshotId(null);
+      setEditingScreenshotUrl("");
+      alert("Image modifiée !");
+    } catch (error) {
+      console.error("Erreur modification capture d'écran :", error);
+      alert("Erreur lors de la modification");
+    }
+  };
+
+  // 🆕 ── Supprimer une capture d'écran (Firestore + fichier Storage associé) ──
+  const handleDeleteScreenshot = async (screenshotId) => {
+    if (!confirm("Supprimer cette image du diaporama ?")) return;
+    try {
+      const shot = screenshots.find((s) => s.id === screenshotId);
+
+      if (shot?.storagePath) {
+        try {
+          await deleteObject(storageRef(storage, shot.storagePath));
+        } catch (storageError) {
+          console.warn("Fichier Storage introuvable ou déjà supprimé :", storageError);
+        }
+      }
+
+      await deleteDoc(doc(db, "screenshots", screenshotId));
+      alert("Image supprimée !");
+    } catch (error) {
+      console.error("Erreur suppression capture d'écran :", error);
+      alert("Erreur lors de la suppression");
+    }
+  };
+
+  // ── Réordonner le diaporama (échange des champs "order") ──
+  const handleMoveScreenshot = async (index, direction) => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= screenshots.length) return;
+
+    const current = screenshots[index];
+    const target = screenshots[targetIndex];
+
+    setIsSavingScreenshotOrder(true);
+    try {
+      const currentOrder = current.order ?? index;
+      const targetOrder = target.order ?? targetIndex;
+
+      await Promise.all([
+        updateDoc(doc(db, "screenshots", current.id), { order: targetOrder }),
+        updateDoc(doc(db, "screenshots", target.id), { order: currentOrder }),
+      ]);
+    } catch (error) {
+      console.error("Erreur réorganisation diaporama :", error);
+      alert("Erreur lors de la réorganisation");
+    } finally {
+      setIsSavingScreenshotOrder(false);
     }
   };
 
@@ -491,6 +687,7 @@ export default function AdminDashboardPage() {
     { key: "overview", label: "Vue d'ensemble", icon: <IconOverview /> },
     { key: "users", label: "Répertoire Clients", icon: <IconUsers /> },
     { key: "pricing", label: "Grille Tarifaire", icon: <IconPricing /> },
+    { key: "screenshots", label: "Diaporama Landing Page", icon: <IconImage /> },
     { key: "help", label: "Centre d'aide", icon: <IconHelp /> },
     { key: "messages", label: "Messagerie", icon: <IconChat />, badge: totalUnreadMessages },
   ];
@@ -602,12 +799,12 @@ export default function AdminDashboardPage() {
               {activeTab === "overview" && <><span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)] shrink-0"></span> <span className="truncate">Tableau de bord</span></>}
               {activeTab === "users" && <><span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.8)] shrink-0"></span> <span className="truncate">Répertoire Clients</span></>}
               {activeTab === "pricing" && <><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] shrink-0"></span> <span className="truncate">Grille Tarifaire</span></>}
+              {activeTab === "screenshots" && <><span className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.8)] shrink-0"></span> <span className="truncate">Diaporama Landing Page</span></>}
               {activeTab === "help" && <><span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.8)] shrink-0"></span> <span className="truncate">Centre d'aide</span></>}
               {activeTab === "messages" && <><span className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.8)] shrink-0"></span> <span className="truncate">Messagerie</span></>}
             </h1>
           </div>
 
-          {/* 🆕 Indicateur de synchronisation temps réel (rassure sur la fraîcheur des données) */}
           {lastSyncAt && (
             <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-slate-500 font-medium shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -864,6 +1061,199 @@ export default function AdminDashboardPage() {
                     </button>
                 </div>
               </form>
+            </div>
+          )}
+
+          {/* TAB : DIAPORAMA LANDING PAGE — 🆕 Upload direct Firebase Storage */}
+          {activeTab === "screenshots" && (
+            <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="mb-6">
+                <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
+                  <IconImage /> Diaporama du Tableau de Bord (Page d'Accueil)
+                </h3>
+                <p className="text-slate-400 text-sm mt-2">
+                  Importez directement vos captures d'écran depuis votre ordinateur. L'image est automatiquement
+                  hébergée sur Firebase Storage et ajoutée au diaporama de la landing page.
+                  Si aucune image n'est ajoutée ici, une image par défaut est utilisée automatiquement.
+                </p>
+              </div>
+
+              {/* 🆕 Zone d'upload par glisser-déposer ou sélection de fichier */}
+              <div className="space-y-4 mb-8 p-4 md:p-6 bg-slate-900/30 rounded-2xl border border-slate-700">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Ajouter une image (upload direct)
+                </label>
+
+                {!previewUrl ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-colors bg-slate-900/50 ${
+                      isDraggingOver ? "border-cyan-500 bg-cyan-500/5" : "border-slate-600 hover:border-cyan-500"
+                    }`}
+                  >
+                    <div className="mx-auto text-slate-500 mb-3 flex justify-center">
+                      <IconUploadCloud />
+                    </div>
+                    <p className="text-slate-400 text-sm font-medium">
+                      Cliquez ou glissez-déposez une image ici
+                    </p>
+                    <p className="text-slate-600 text-xs mt-1">PNG, JPG, WEBP — Max 5 Mo</p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="relative aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-700">
+                      <img src={previewUrl} alt="Aperçu" className="w-full h-full object-cover" />
+                      {!isUploading && (
+                        <button
+                          type="button"
+                          onClick={handleCancelSelection}
+                          className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-lg transition-colors"
+                        >
+                          <IconClose />
+                        </button>
+                      )}
+                    </div>
+
+                    {isUploading && (
+                      <div className="space-y-1">
+                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-cyan-400 font-bold text-right">{uploadProgress}%</p>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleUploadScreenshot}
+                      disabled={isUploading}
+                      className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-cyan-600/30 transition-all flex justify-center items-center gap-2 disabled:opacity-50"
+                    >
+                      {isUploading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          Envoi en cours...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Confirmer et ajouter au diaporama
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-500">L'image sera automatiquement placée à la fin du diaporama. Utilisez les flèches ci-dessous pour réorganiser l'ordre.</p>
+              </div>
+
+              {/* Liste des images */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider border-b border-slate-800 pb-2 flex items-center justify-between">
+                  <span>Images du diaporama ({screenshots.length})</span>
+                  {isSavingScreenshotOrder && (
+                    <span className="text-[10px] text-cyan-400 flex items-center gap-1.5 normal-case font-medium">
+                      <div className="w-3 h-3 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin"></div>
+                      Réorganisation...
+                    </span>
+                  )}
+                </h4>
+
+                {screenshots.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 italic">
+                    Aucune image ajoutée. L'image par défaut du dashboard sera affichée sur la landing page.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {screenshots.map((shot, index) => (
+                      <div key={shot.id} className="bg-slate-900/50 border border-slate-700 rounded-2xl p-4 space-y-3 group hover:border-slate-600 transition-all">
+                        {editingScreenshotId === shot.id ? (
+                          <form onSubmit={handleUpdateScreenshotUrl} className="space-y-3">
+                            <input
+                              type="text"
+                              value={editingScreenshotUrl}
+                              onChange={(e) => setEditingScreenshotUrl(e.target.value)}
+                              className="w-full p-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-xs outline-none focus:border-cyan-500"
+                              required
+                            />
+                            <div className="flex gap-2">
+                              <button type="submit" className="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-lg">Enregistrer</button>
+                              <button type="button" onClick={() => { setEditingScreenshotId(null); setEditingScreenshotUrl(""); }} className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg">Annuler</button>
+                            </div>
+                          </form>
+                        ) : (
+                          <>
+                            <div className="relative aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
+                              <img
+                                src={shot.url}
+                                alt={`Capture ${index + 1}`}
+                                className="w-full h-full object-cover"
+                                onError={(e) => { e.currentTarget.style.opacity = "0.2"; }}
+                              />
+                              <span className="absolute top-2 left-2 bg-black/70 text-white text-[10px] font-black px-2 py-1 rounded-lg">
+                                #{index + 1}
+                              </span>
+                              {shot.storagePath && (
+                                <span className="absolute top-2 right-2 bg-emerald-500/80 text-white text-[9px] font-bold px-2 py-1 rounded-lg flex items-center gap-1">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                  Storage
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleMoveScreenshot(index, "up")}
+                                disabled={index === 0 || isSavingScreenshotOrder}
+                                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                title="Déplacer vers le haut (avant)"
+                              >
+                                <IconArrowUp />
+                              </button>
+                              <button
+                                onClick={() => handleMoveScreenshot(index, "down")}
+                                disabled={index === screenshots.length - 1 || isSavingScreenshotOrder}
+                                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                title="Déplacer vers le bas (après)"
+                              >
+                                <IconArrowDown />
+                              </button>
+                              <button
+                                onClick={() => { setEditingScreenshotId(shot.id); setEditingScreenshotUrl(shot.url); }}
+                                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                Modifier
+                              </button>
+                              <button
+                                onClick={() => handleDeleteScreenshot(shot.id)}
+                                className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors border border-red-500/20"
+                                title="Supprimer"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
