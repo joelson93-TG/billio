@@ -9,8 +9,8 @@ import {
 } from "firebase/firestore";
 import { 
   ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject 
-} from "firebase/storage"; // 🆕 AJOUT
-import { auth, db, storage } from "@/firebase"; // 🆕 storage ajouté
+} from "firebase/storage";
+import { auth, db, storage } from "@/firebase";
 import { 
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid 
@@ -29,15 +29,28 @@ const IconRefresh = () => <svg className="w-4 h-4" fill="none" stroke="currentCo
 const IconImage = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
 const IconArrowUp = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>;
 const IconArrowDown = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>;
-// 🆕 Icône upload (zone de dépôt)
 const IconUploadCloud = () => <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>;
+// 🔄 CORRIGÉ : accepte désormais une prop className (bug précédent : className ignorée)
+const IconWhatsApp = ({ className = "w-4 h-4" }) => <svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>;
+// 🆕 Icône email (rappels par mail — canal de secours)
+const IconMail = ({ className = "w-4 h-4" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>;
 
 const formatChatTime = (timestamp) => {
   if (!timestamp?.toDate) return "...";
   return timestamp.toDate().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 };
 
-// Calcule les jours restants depuis la date de fin (trialEndDate / endDate)
+// 🆕 Formatage de la date du dernier passage automatique de rappel
+const formatLastRun = (timestamp) => {
+  if (!timestamp?.toDate) return "Aucune exécution enregistrée";
+  return timestamp.toDate().toLocaleString("fr-FR", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
+  });
+};
+
+// 🆕 Vérifie qu'une chaîne ressemble à un email valide
+const isValidEmail = (email) => typeof email === "string" && email.includes("@");
+
 const computeDaysLeft = (userData) => {
   const sub = userData.subscription || {};
   const endDateStr = userData.trialEndDate || userData.endDate;
@@ -51,7 +64,6 @@ const computeDaysLeft = (userData) => {
   return typeof sub.daysLeft === "number" ? sub.daysLeft : 30;
 };
 
-// Résout le plan de l'utilisateur en cherchant dans plusieurs emplacements possibles.
 const resolvePlan = (userData, sub, computedStatus) => {
   const plan =
     sub.plan ||
@@ -76,9 +88,20 @@ export default function AdminDashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState(null);
 
-  // Rappels WhatsApp (AfriMsg)
+  // Rappels WhatsApp / Email (AfriMsg + Resend)
   const [sendingReminderTo, setSendingReminderTo] = useState(null);
   const [isSendingBulkReminder, setIsSendingBulkReminder] = useState(false);
+  const [reminderStats, setReminderStats] = useState(null); // 🆕 Stats du dernier passage auto
+
+  // ── Test de connexion AfriMsg (WhatsApp) — RESTAURÉ ──
+  const [testPhoneNumber, setTestPhoneNumber] = useState("");
+  const [isTestingAfrimsg, setIsTestingAfrimsg] = useState(false);
+  const [afrimsgTestResult, setAfrimsgTestResult] = useState(null);
+
+  // 🆕 Test de connexion Resend (Email) — bonus, complète le test WhatsApp
+  const [testEmailAddress, setTestEmailAddress] = useState("");
+  const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [emailTestResult, setEmailTestResult] = useState(null);
 
   const [stats, setStats] = useState({
     totalUsers: 0, activeUsers: 0, trialUsers: 0, expiredUsers: 0, totalRevenue: 0,
@@ -97,13 +120,11 @@ export default function AdminDashboardPage() {
   const [newTutorial, setNewTutorial] = useState({ title: "", embedUrl: "" });
   const [editingTutorial, setEditingTutorial] = useState(null);
 
-  // ── État du diaporama de la landing page (collection "screenshots") ──
   const [screenshots, setScreenshots] = useState([]);
   const [editingScreenshotId, setEditingScreenshotId] = useState(null);
   const [editingScreenshotUrl, setEditingScreenshotUrl] = useState("");
   const [isSavingScreenshotOrder, setIsSavingScreenshotOrder] = useState(false);
 
-  // 🆕 ── États pour l'upload direct vers Firebase Storage ──
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -146,7 +167,19 @@ export default function AdminDashboardPage() {
     return () => unsub();
   }, [isAdminVerified]);
 
-  // ── Diaporama Landing Page en TEMPS RÉEL (collection "screenshots") ──
+  // ── 🆕 Statistiques du dernier passage automatique de rappel (temps réel) ──
+  useEffect(() => {
+    if (!isAdminVerified) return;
+    const statsRef = doc(db, "stats", "reminderRun");
+    const unsub = onSnapshot(statsRef, (snap) => {
+      if (snap.exists()) setReminderStats(snap.data());
+    }, (error) => {
+      console.error("Erreur écoute stats rappels :", error);
+    });
+    return () => unsub();
+  }, [isAdminVerified]);
+
+  // ── Diaporama Landing Page en TEMPS RÉEL ──
   useEffect(() => {
     if (!isAdminVerified) return;
     const q = query(collection(db, "screenshots"), orderBy("order", "asc"));
@@ -204,6 +237,7 @@ export default function AdminDashboardPage() {
                 plan: resolvedPlan,
                 daysLeft,
                 totalPaid: userData.totalPaid || userData.lastPaymentAmount || 0,
+                lastReminderChannel: userData.lastReminderChannel || null, // 🆕
               };
             })
           );
@@ -269,7 +303,6 @@ export default function AdminDashboardPage() {
     return () => unsub();
   }, [selectedChatId]);
 
-  // 🆕 Nettoyage de l'URL de prévisualisation (évite les fuites mémoire)
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -411,7 +444,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // 🆕 ── Validation + sélection d'un fichier local (input ou drag & drop) ──
+  // ── Upload de captures d'écran (Firebase Storage) ──
   const validateAndSetFile = (file) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -426,13 +459,11 @@ export default function AdminDashboardPage() {
     setPreviewUrl(URL.createObjectURL(file));
   };
 
-  // 🆕 ── Sélection via l'input file classique ──
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     validateAndSetFile(file);
   };
 
-  // 🆕 ── Support du glisser-déposer (drag & drop) ──
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDraggingOver(false);
@@ -450,7 +481,6 @@ export default function AdminDashboardPage() {
     setIsDraggingOver(false);
   };
 
-  // 🆕 ── Annuler la sélection avant upload ──
   const handleCancelSelection = () => {
     setSelectedFile(null);
     setPreviewUrl(null);
@@ -458,10 +488,6 @@ export default function AdminDashboardPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // 🆕 ── Upload automatique vers Firebase Storage + sauvegarde Firestore ──
-  // 1. Upload du fichier dans Storage (bucket "screenshots/")
-  // 2. Récupération de l'URL de téléchargement permanente
-  // 3. Écriture du document Firestore avec cette URL + le chemin Storage
   const handleUploadScreenshot = async () => {
     if (!selectedFile) {
       alert("Veuillez sélectionner une image");
@@ -510,7 +536,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // ── Modifier l'URL d'une capture existante (édition manuelle, optionnelle) ──
   const handleUpdateScreenshotUrl = async (e) => {
     e.preventDefault();
     if (!editingScreenshotId || !editingScreenshotUrl.trim()) return;
@@ -528,7 +553,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // 🆕 ── Supprimer une capture d'écran (Firestore + fichier Storage associé) ──
   const handleDeleteScreenshot = async (screenshotId) => {
     if (!confirm("Supprimer cette image du diaporama ?")) return;
     try {
@@ -550,7 +574,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // ── Réordonner le diaporama (échange des champs "order") ──
   const handleMoveScreenshot = async (index, direction) => {
     const targetIndex = direction === "up" ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= screenshots.length) return;
@@ -585,31 +608,68 @@ export default function AdminDashboardPage() {
     setIsMobileMenuOpen(false);
   };
 
-  // ── Rappels WhatsApp via AfriMsg ──
+  // ==========================================================
+  // 🔄 Rappels multi-canal (WhatsApp via AfriMsg / Email via Resend)
+  // ==========================================================
+
   const buildReminderMessage = (user) => {
+    const greeting = `Bonjour ${user.companyName} 👋,`;
+    const instructions =
+      `\n\nPour continuer à profiter de toutes les fonctionnalités de *Billio*, ` +
+      `rendez-vous dans votre espace :\n\n` +
+      `👉 *Paramètres société* > choisissez le forfait qui vous convient > ` +
+      `payez en toute sécurité via *FedaPay*.\n\n💙 L'équipe Billio`;
+
     if (user.status === "expired" || user.daysLeft <= 0) {
-      return `Bonjour ${user.companyName} 👋,\n\nVotre abonnement JBLESS a expiré. Renouvelez dès maintenant pour retrouver l'accès complet à votre logiciel de facturation.\n\n💳 Contactez-nous pour renouveler votre licence.`;
+      return `${greeting}\n\nVotre abonnement *Billio* a expiré. Votre accès complet est actuellement suspendu.${instructions}`;
     }
-    return `Bonjour ${user.companyName} 👋,\n\nVotre abonnement JBLESS expire dans ${user.daysLeft} jour(s). Pensez à renouveler pour éviter toute interruption de service.\n\n💳 Contactez-nous dès maintenant.`;
+    return `${greeting}\n\nVotre abonnement *Billio* expire dans *${user.daysLeft} jour(s)*. Pensez à renouveler dès maintenant pour éviter toute interruption de service.${instructions}`;
   };
 
-  const isReminderTarget = (u) => !!u.phone && (u.status === "expired" || u.daysLeft <= 3);
+  // 🔄 MODIFIÉ : cible désormais aussi les clients sans téléphone (fallback email garanti)
+  const isReminderTarget = (u) =>
+    (!!u.phone || isValidEmail(u.email)) && (u.status === "expired" || u.daysLeft <= 3);
 
+  // 🔄 MODIFIÉ : choix automatique du canal (WhatsApp en priorité, sinon Email)
   const handleSendReminder = async (user) => {
-    if (!user.phone) {
-      alert("Aucun numéro de téléphone pour ce client");
+    const channel = user.phone ? "whatsapp" : (isValidEmail(user.email) ? "email" : null);
+    if (!channel) {
+      alert("Ce client n'a ni numéro de téléphone ni email valide");
       return;
     }
+
     setSendingReminderTo(user.uid);
     try {
-      const res = await fetch("/api/whatsapp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: user.phone, message: buildReminderMessage(user) }),
-      });
+      let res;
+      if (channel === "whatsapp") {
+        res = await fetch("/api/whatsapp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: user.phone, message: buildReminderMessage(user) }),
+        });
+      } else {
+        res = await fetch("/api/email/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: user.email,
+            companyName: user.companyName,
+            status: user.status,
+            daysLeft: user.daysLeft,
+          }),
+        });
+      }
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      alert(`✅ Rappel envoyé à ${user.companyName}`);
+
+      // ✅ Synchronisation avec la Cloud Function (évite un double envoi le même jour)
+      await updateDoc(doc(db, "users", user.uid), {
+        lastReminderSentAt: serverTimestamp(),
+        lastReminderChannel: channel,
+      });
+
+      alert(`✅ Rappel envoyé à ${user.companyName} par ${channel === "whatsapp" ? "WhatsApp" : "Email"}`);
     } catch (error) {
       alert(`❌ Erreur : ${error.message}`);
     } finally {
@@ -617,34 +677,126 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // 🔄 MODIFIÉ : sépare les cibles WhatsApp (bulk natif) des cibles Email (séquentiel)
   const handleBulkReminder = async () => {
     const targets = usersList.filter(isReminderTarget);
 
     if (targets.length === 0) {
-      alert("Aucun client à rappeler (expiré ou ≤ 3 jours) avec un numéro renseigné.");
+      alert("Aucun client à rappeler (expiré ou ≤ 3 jours) parmi les clients joignables.");
       return;
     }
     if (targets.length === 1) {
       await handleSendReminder(targets[0]);
       return;
     }
-    if (!confirm(`Envoyer un rappel WhatsApp à ${targets.length} client(s) ?`)) return;
+
+    const whatsappTargets = targets.filter((u) => u.phone);
+    const emailTargets = targets.filter((u) => !u.phone && isValidEmail(u.email));
+
+    if (!confirm(
+      `Envoyer un rappel à ${targets.length} client(s) ?\n\n` +
+      `📱 WhatsApp : ${whatsappTargets.length}\n` +
+      `✉️ Email : ${emailTargets.length}`
+    )) return;
 
     setIsSendingBulkReminder(true);
     try {
-      const messages = targets.map((u) => ({ to: u.phone, message: buildReminderMessage(u) }));
-      const res = await fetch("/api/whatsapp/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages, delayMin: 3, delayMax: 8 }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      alert(`✅ Envoi groupé lancé pour ${targets.length} client(s).`);
+      if (whatsappTargets.length >= 2) {
+        const messages = whatsappTargets.map((u) => ({ to: u.phone, message: buildReminderMessage(u) }));
+        const res = await fetch("/api/whatsapp/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages, delayMin: 3, delayMax: 8 }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        await Promise.all(
+          whatsappTargets.map((u) =>
+            updateDoc(doc(db, "users", u.uid), {
+              lastReminderSentAt: serverTimestamp(),
+              lastReminderChannel: "whatsapp",
+            }).catch(() => {})
+          )
+        );
+      } else if (whatsappTargets.length === 1) {
+        await handleSendReminder(whatsappTargets[0]);
+      }
+
+      for (const u of emailTargets) {
+        try {
+          const res = await fetch("/api/email/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: u.email,
+              companyName: u.companyName,
+              status: u.status,
+              daysLeft: u.daysLeft,
+            }),
+          });
+          if (res.ok) {
+            await updateDoc(doc(db, "users", u.uid), {
+              lastReminderSentAt: serverTimestamp(),
+              lastReminderChannel: "email",
+            });
+          }
+        } catch (e) {
+          console.error(`Erreur email pour ${u.uid} :`, e);
+        }
+      }
+
+      alert(`✅ Envoi groupé terminé : ${whatsappTargets.length} WhatsApp, ${emailTargets.length} Email`);
     } catch (error) {
       alert(`❌ Erreur : ${error.message}`);
     } finally {
       setIsSendingBulkReminder(false);
+    }
+  };
+
+  // ── ✅ RESTAURÉ : Teste la connexion à l'API AfriMsg (WhatsApp) ──
+  const handleTestAfrimsg = async (e) => {
+    e.preventDefault();
+    setIsTestingAfrimsg(true);
+    setAfrimsgTestResult(null);
+    try {
+      const res = await fetch("/api/whatsapp/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: testPhoneNumber }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Erreur inconnue");
+      }
+      setAfrimsgTestResult({ success: true, message: data.message });
+    } catch (error) {
+      setAfrimsgTestResult({ success: false, message: error.message });
+    } finally {
+      setIsTestingAfrimsg(false);
+    }
+  };
+
+  // 🆕 Teste la connexion à Resend (Email) — complète le test WhatsApp
+  const handleTestEmail = async (e) => {
+    e.preventDefault();
+    setIsTestingEmail(true);
+    setEmailTestResult(null);
+    try {
+      const res = await fetch("/api/email/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: testEmailAddress }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Erreur inconnue");
+      }
+      setEmailTestResult({ success: true, message: data.message });
+    } catch (error) {
+      setEmailTestResult({ success: false, message: error.message });
+    } finally {
+      setIsTestingEmail(false);
     }
   };
 
@@ -691,6 +843,10 @@ export default function AdminDashboardPage() {
     { key: "help", label: "Centre d'aide", icon: <IconHelp /> },
     { key: "messages", label: "Messagerie", icon: <IconChat />, badge: totalUnreadMessages },
   ];
+
+  const totalReminderSent = reminderStats
+    ? (reminderStats.sentWhatsappCount || 0) + (reminderStats.sentEmailCount || 0)
+    : 0;
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-100 flex font-sans selection:bg-blue-500/30">
@@ -904,7 +1060,7 @@ export default function AdminDashboardPage() {
           {/* TAB : USERS */}
           {activeTab === "users" && (
             <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-4 md:p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-8">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h3 className="font-extrabold text-base text-white uppercase tracking-wider flex items-center gap-2">
                       <IconUsers /> Base de données Clients
@@ -913,7 +1069,7 @@ export default function AdminDashboardPage() {
                     onClick={handleBulkReminder}
                     disabled={isSendingBulkReminder}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold text-xs rounded-xl transition-all border border-emerald-500/20 disabled:opacity-50"
-                    title="Envoyer un rappel WhatsApp à tous les clients expirés ou à ≤ 3 jours"
+                    title="Envoyer un rappel (WhatsApp ou Email) à tous les clients expirés ou à ≤ 3 jours"
                   >
                     {isSendingBulkReminder ? (
                       <div className="w-3 h-3 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin"></div>
@@ -934,6 +1090,69 @@ export default function AdminDashboardPage() {
                     />
                 </div>
               </div>
+
+              {/* 🆕 MINI-STATS : Dernier passage automatique de rappel */}
+              {reminderStats && (
+                <div className="mb-8 bg-slate-900/40 border border-slate-800 rounded-2xl p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                    <h4 className="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                      <IconRefresh /> Dernier Passage Automatique
+                    </h4>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      {formatLastRun(reminderStats.lastRunAt)} · déclenché par{" "}
+                      <span className={reminderStats.triggeredBy === "auto" ? "text-emerald-400" : "text-amber-400"}>
+                        {reminderStats.triggeredBy === "auto" ? "Cloud Scheduler (8h00)" : "Test manuel"}
+                      </span>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="bg-[#0F172A] border border-emerald-500/20 rounded-xl p-3 text-center">
+                      <p className="text-2xl font-black text-emerald-400">{reminderStats.sentWhatsappCount ?? 0}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 flex items-center justify-center gap-1">
+                        <IconWhatsApp className="w-3.5 h-3.5" /> WhatsApp
+                      </p>
+                    </div>
+                    <div className="bg-[#0F172A] border border-blue-500/20 rounded-xl p-3 text-center">
+                      <p className="text-2xl font-black text-blue-400">{reminderStats.sentEmailCount ?? 0}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 flex items-center justify-center gap-1">
+                        <IconMail className="w-3.5 h-3.5" /> Email
+                      </p>
+                    </div>
+                    <div className="bg-[#0F172A] border border-slate-700 rounded-xl p-3 text-center">
+                      <p className="text-2xl font-black text-slate-300">{reminderStats.skippedCount ?? 0}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Ignorés</p>
+                    </div>
+                    <div className="bg-[#0F172A] border border-red-500/20 rounded-xl p-3 text-center">
+                      <p className="text-2xl font-black text-red-400">{reminderStats.errorCount ?? 0}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Erreurs</p>
+                    </div>
+                    <div className="bg-[#0F172A] border border-amber-500/20 rounded-xl p-3 text-center">
+                      <p className="text-2xl font-black text-amber-400">{reminderStats.unreachableCount ?? 0}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Injoignables</p>
+                    </div>
+                  </div>
+
+                  {totalReminderSent > 0 && (
+                    <div className="mt-4">
+                      <div className="flex h-2 rounded-full overflow-hidden bg-slate-800">
+                        <div
+                          className="bg-emerald-500 transition-all duration-500"
+                          style={{ width: `${(reminderStats.sentWhatsappCount / totalReminderSent) * 100}%` }}
+                        ></div>
+                        <div
+                          className="bg-blue-500 transition-all duration-500"
+                          style={{ width: `${(reminderStats.sentEmailCount / totalReminderSent) * 100}%` }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-slate-500 mt-1.5 font-semibold">
+                        <span>📱 WhatsApp {Math.round((reminderStats.sentWhatsappCount / totalReminderSent) * 100)}%</span>
+                        <span>✉️ Email {Math.round((reminderStats.sentEmailCount / totalReminderSent) * 100)}%</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[700px] text-left border-collapse text-sm">
@@ -956,6 +1175,12 @@ export default function AdminDashboardPage() {
                             <div className="min-w-0">
                                 <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors whitespace-nowrap">{u.companyName}</div>
                                 <div className="text-slate-400 text-xs mt-0.5 whitespace-nowrap">{u.email}</div>
+                                {u.lastReminderChannel && (
+                                  <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
+                                    {u.lastReminderChannel.includes("email") ? <IconMail className="w-3 h-3" /> : <IconWhatsApp className="w-3 h-3" />}
+                                    Dernier rappel : {u.lastReminderChannel === "whatsapp" ? "WhatsApp" : u.lastReminderChannel === "email_fallback" ? "Email (secours)" : "Email"}
+                                  </div>
+                                )}
                             </div>
                           </div>
                         </td>
@@ -982,24 +1207,35 @@ export default function AdminDashboardPage() {
                               <button
                                 onClick={() => handleSendReminder(u)}
                                 disabled={sendingReminderTo === u.uid}
-                                className="inline-flex items-center gap-2 px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 font-bold text-xs rounded-xl transition-all border border-blue-500/20 disabled:opacity-50"
-                                title="Envoyer un rappel de renouvellement par WhatsApp"
+                                className={`inline-flex items-center gap-2 px-3 py-2 font-bold text-xs rounded-xl transition-all border disabled:opacity-50 ${
+                                  u.phone
+                                    ? "bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/20"
+                                    : "bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border-purple-500/20"
+                                }`}
+                                title={u.phone ? "Envoyer un rappel par WhatsApp" : "Envoyer un rappel par Email (aucun numéro renseigné)"}
                               >
                                 {sendingReminderTo === u.uid ? (
-                                  <div className="w-3 h-3 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin"></div>
-                                ) : (
+                                  <div className={`w-3 h-3 border-2 rounded-full animate-spin ${u.phone ? "border-blue-400/30 border-t-blue-400" : "border-purple-400/30 border-t-purple-400"}`}></div>
+                                ) : u.phone ? (
                                   <IconChat />
+                                ) : (
+                                  <IconMail />
                                 )}
-                                Rappel
+                                {u.phone ? "Rappel" : "Rappel (Email)"}
                               </button>
                             )}
+
                             {u.phone ? (
                               <a href={`https://wa.me/${u.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] font-bold text-xs rounded-xl transition-all border border-[#25D366]/20 hover:scale-105">
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                                <IconWhatsApp />
                                 Contacter
                               </a>
+                            ) : isValidEmail(u.email) ? (
+                              <a href={`mailto:${u.email}`} className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700/30 hover:bg-slate-700/50 text-slate-300 font-bold text-xs rounded-xl transition-all border border-slate-600/30">
+                                <IconMail /> Email
+                              </a>
                             ) : (
-                              <span className="text-slate-600 text-xs italic">Aucun numéro</span>
+                              <span className="text-slate-600 text-xs italic">Aucun contact</span>
                             )}
                           </div>
                         </td>
@@ -1064,7 +1300,7 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          {/* TAB : DIAPORAMA LANDING PAGE — 🆕 Upload direct Firebase Storage */}
+          {/* TAB : DIAPORAMA LANDING PAGE */}
           {activeTab === "screenshots" && (
             <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="mb-6">
@@ -1078,7 +1314,6 @@ export default function AdminDashboardPage() {
                 </p>
               </div>
 
-              {/* 🆕 Zone d'upload par glisser-déposer ou sélection de fichier */}
               <div className="space-y-4 mb-8 p-4 md:p-6 bg-slate-900/30 rounded-2xl border border-slate-700">
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
                   Ajouter une image (upload direct)
@@ -1161,7 +1396,6 @@ export default function AdminDashboardPage() {
                 <p className="text-[11px] text-slate-500">L'image sera automatiquement placée à la fin du diaporama. Utilisez les flèches ci-dessous pour réorganiser l'ordre.</p>
               </div>
 
-              {/* Liste des images */}
               <div className="space-y-4">
                 <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider border-b border-slate-800 pb-2 flex items-center justify-between">
                   <span>Images du diaporama ({screenshots.length})</span>
@@ -1260,6 +1494,136 @@ export default function AdminDashboardPage() {
           {/* TAB : CENTRE D'AIDE */}
           {activeTab === "help" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              
+              {/* ✅ RESTAURÉ : Test de connexion AfriMsg + 🆕 Test Resend (Email) */}
+              <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
+                <div className="mb-6">
+                  <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
+                    <IconWhatsApp className="w-6 h-6 text-emerald-400" />
+                    Test des Canaux de Rappel (WhatsApp & Email)
+                  </h3>
+                  <p className="text-slate-400 text-sm mt-2">
+                    Vérifiez que les intégrations WhatsApp (AfriMsg) et Email (Resend) fonctionnent
+                    en envoyant un message de test réel. Utile après une mise à jour de clé API ou
+                    en cas de doute sur le bon fonctionnement des rappels automatiques.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Test WhatsApp — RESTAURÉ */}
+                  <div className="space-y-3 p-4 bg-slate-900/30 rounded-2xl border border-slate-700">
+                    <label className="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                      <IconWhatsApp className="w-4 h-4" /> Canal WhatsApp (AfriMsg)
+                    </label>
+                    <form onSubmit={handleTestAfrimsg} className="space-y-3">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={testPhoneNumber}
+                          onChange={(e) => setTestPhoneNumber(e.target.value)}
+                          placeholder="Ex: 22890000000"
+                          className="flex-1 p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                          required
+                        />
+                        <button
+                          type="submit"
+                          disabled={isTestingAfrimsg}
+                          className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-emerald-600/30 transition-all flex justify-center items-center gap-2 disabled:opacity-50 shrink-0"
+                        >
+                          {isTestingAfrimsg ? (
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                          )}
+                          Tester
+                        </button>
+                      </div>
+
+                      {afrimsgTestResult && (
+                        <div
+                          className={`p-3 rounded-xl border text-xs font-medium ${
+                            afrimsgTestResult.success
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                              : "bg-red-500/10 border-red-500/20 text-red-400"
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            {afrimsgTestResult.success ? (
+                              <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            )}
+                            <span>{afrimsgTestResult.message}</span>
+                          </div>
+                        </div>
+                      )}
+                    </form>
+                  </div>
+
+                  {/* 🆕 Test Email (Resend) — bonus, complète le test WhatsApp */}
+                  <div className="space-y-3 p-4 bg-slate-900/30 rounded-2xl border border-slate-700">
+                    <label className="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                      <IconMail className="w-4 h-4" /> Canal Email (Resend) — Fallback
+                    </label>
+                    <form onSubmit={handleTestEmail} className="space-y-3">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="email"
+                          value={testEmailAddress}
+                          onChange={(e) => setTestEmailAddress(e.target.value)}
+                          placeholder="Ex: test@exemple.com"
+                          className="flex-1 p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                          required
+                        />
+                        <button
+                          type="submit"
+                          disabled={isTestingEmail}
+                          className="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-blue-600/30 transition-all flex justify-center items-center gap-2 disabled:opacity-50 shrink-0"
+                        >
+                          {isTestingEmail ? (
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                          )}
+                          Tester
+                        </button>
+                      </div>
+
+                      {emailTestResult && (
+                        <div
+                          className={`p-3 rounded-xl border text-xs font-medium ${
+                            emailTestResult.success
+                              ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                              : "bg-red-500/10 border-red-500/20 text-red-400"
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            {emailTestResult.success ? (
+                              <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            )}
+                            <span>{emailTestResult.message}</span>
+                          </div>
+                        </div>
+                      )}
+                    </form>
+                  </div>
+                </div>
+              </div>
+
               <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
                 <div className="mb-6">
                   <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
@@ -1272,7 +1636,7 @@ export default function AdminDashboardPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                        <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                        <IconWhatsApp className="w-4 h-4 text-green-500" />
                         WhatsApp <span className="text-slate-500 font-normal text-[10px]">(optionnel)</span>
                       </label>
                       <input type="text" value={helpLinks.whatsapp} onChange={(e) => setHelpLinks({...helpLinks, whatsapp: e.target.value})} placeholder="+33612345678 ou https://wa.me/33612345678" className="w-full p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all" />

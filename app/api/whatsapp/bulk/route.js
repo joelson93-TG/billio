@@ -1,7 +1,6 @@
+// app/api/whatsapp/bulk/route.js
 import { NextResponse } from "next/server";
-
-const AFRIMSG_BASE_URL = process.env.AFRIMSG_BASE_URL;
-const AFRIMSG_API_KEY = process.env.AFRIMSG_API_KEY;
+import { sendBulkViaApi } from "@/lib/afrimsg";
 
 export async function POST(request) {
   try {
@@ -14,34 +13,16 @@ export async function POST(request) {
       );
     }
 
-    const formatted = messages.map((m) => ({
-      to: m.to.replace(/[^0-9]/g, ""),
-      message: m.message,
-    }));
+    const result = await sendBulkViaApi(messages, delayMin, delayMax);
 
-    const response = await fetch(`${AFRIMSG_BASE_URL}/messages/bulk`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${AFRIMSG_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messages: formatted,
-        delay_min: delayMin,
-        delay_max: delayMax,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
+    if (!result.success) {
       return NextResponse.json(
-        { error: data.message || "Erreur envoi en masse" },
-        { status: response.status }
+        { error: result.error || "Erreur envoi en masse" },
+        { status: result.status || 500 }
       );
     }
 
-    return NextResponse.json({ success: true, ...data });
+    return NextResponse.json({ success: true, ...result.data });
   } catch (error) {
     console.error("Erreur /api/whatsapp/bulk :", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

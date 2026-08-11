@@ -1,9 +1,7 @@
+// app/api/whatsapp/send/route.js
 import { NextResponse } from "next/server";
+import { sendWhatsAppMessage } from "@/lib/afrimsg";
 
-const AFRIMSG_BASE_URL = process.env.AFRIMSG_BASE_URL;
-const AFRIMSG_API_KEY = process.env.AFRIMSG_API_KEY;
-
-// Messages d'erreur correspondant aux codes de réponse AfriMsg
 const ERROR_MESSAGES = {
   401: "Clé API manquante ou invalide",
   402: "Crédits insuffisants sur AfriMsg",
@@ -14,13 +12,6 @@ const ERROR_MESSAGES = {
 
 export async function POST(request) {
   try {
-    if (!AFRIMSG_API_KEY || !AFRIMSG_BASE_URL) {
-      return NextResponse.json(
-        { error: "Configuration AfriMsg manquante côté serveur" },
-        { status: 500 }
-      );
-    }
-
     const { to, message, mediaUrl, mediaType, deviceId } = await request.json();
 
     if (!to || !message) {
@@ -30,42 +21,20 @@ export async function POST(request) {
       );
     }
 
-    // Format international, chiffres uniquement
-    const cleanPhone = to.replace(/[^0-9]/g, "");
-    if (cleanPhone.length < 8) {
+    const result = await sendWhatsAppMessage(to, message, { mediaUrl, mediaType, deviceId });
+
+    if (!result.success) {
+      const status = result.status || 500;
       return NextResponse.json(
-        { error: "Numéro de téléphone invalide" },
-        { status: 422 }
-      );
-    }
-
-    const payload = { to: cleanPhone, message };
-    if (mediaUrl) payload.media_url = mediaUrl;
-    if (mediaType) payload.media_type = mediaType;
-    if (deviceId) payload.device_id = deviceId;
-
-    const response = await fetch(`${AFRIMSG_BASE_URL}/messages/send`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${AFRIMSG_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: ERROR_MESSAGES[response.status] || data.message || "Erreur d'envoi" },
-        { status: response.status }
+        { error: ERROR_MESSAGES[status] || result.error || "Erreur d'envoi" },
+        { status }
       );
     }
 
     return NextResponse.json({
       success: true,
-      messageId: data.message_id,
-      credits: data.credits,
+      messageId: result.messageId,
+      credits: result.credits,
     });
   } catch (error) {
     console.error("Erreur /api/whatsapp/send :", error);
