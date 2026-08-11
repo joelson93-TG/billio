@@ -30,9 +30,7 @@ const IconImage = () => <svg className="w-5 h-5" fill="none" stroke="currentColo
 const IconArrowUp = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>;
 const IconArrowDown = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>;
 const IconUploadCloud = () => <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>;
-// 🔄 CORRIGÉ : accepte désormais une prop className (bug précédent : className ignorée)
 const IconWhatsApp = ({ className = "w-4 h-4" }) => <svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>;
-// 🆕 Icône email (rappels par mail — canal de secours)
 const IconMail = ({ className = "w-4 h-4" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>;
 
 const formatChatTime = (timestamp) => {
@@ -40,7 +38,6 @@ const formatChatTime = (timestamp) => {
   return timestamp.toDate().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 };
 
-// 🆕 Formatage de la date du dernier passage automatique de rappel
 const formatLastRun = (timestamp) => {
   if (!timestamp?.toDate) return "Aucune exécution enregistrée";
   return timestamp.toDate().toLocaleString("fr-FR", {
@@ -48,7 +45,6 @@ const formatLastRun = (timestamp) => {
   });
 };
 
-// 🆕 Vérifie qu'une chaîne ressemble à un email valide
 const isValidEmail = (email) => typeof email === "string" && email.includes("@");
 
 const computeDaysLeft = (userData) => {
@@ -88,17 +84,14 @@ export default function AdminDashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState(null);
 
-  // Rappels WhatsApp / Email (AfriMsg + Resend)
   const [sendingReminderTo, setSendingReminderTo] = useState(null);
   const [isSendingBulkReminder, setIsSendingBulkReminder] = useState(false);
-  const [reminderStats, setReminderStats] = useState(null); // 🆕 Stats du dernier passage auto
+  const [reminderStats, setReminderStats] = useState(null);
 
-  // ── Test de connexion AfriMsg (WhatsApp) — RESTAURÉ ──
   const [testPhoneNumber, setTestPhoneNumber] = useState("");
   const [isTestingAfrimsg, setIsTestingAfrimsg] = useState(false);
   const [afrimsgTestResult, setAfrimsgTestResult] = useState(null);
 
-  // 🆕 Test de connexion Resend (Email) — bonus, complète le test WhatsApp
   const [testEmailAddress, setTestEmailAddress] = useState("");
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [emailTestResult, setEmailTestResult] = useState(null);
@@ -167,7 +160,7 @@ export default function AdminDashboardPage() {
     return () => unsub();
   }, [isAdminVerified]);
 
-  // ── 🆕 Statistiques du dernier passage automatique de rappel (temps réel) ──
+  // ── Statistiques du dernier passage automatique de rappel (temps réel) ──
   useEffect(() => {
     if (!isAdminVerified) return;
     const statsRef = doc(db, "stats", "reminderRun");
@@ -231,13 +224,17 @@ export default function AdminDashboardPage() {
               return {
                 uid: userDoc.id,
                 email: userData.email || companyData.email || "Non renseigné",
-                phone: companyData.phone || userData.phone || "",
+                // 🆕 FIX : ajout de userData.whatsappNumber dans la chaîne de fallback
+                // pour que les nouveaux comptes (inscrits via le formulaire signup)
+                // soient bien détectés comme joignables par WhatsApp.
+                // Ordre de priorité conservé : company.phone > whatsappNumber > ancien champ phone
+                phone: companyData.phone || userData.whatsappNumber || userData.phone || "",
                 companyName: companyData.companyName || userData.businessName || "Entreprise non configurée",
                 status: computedStatus,
                 plan: resolvedPlan,
                 daysLeft,
                 totalPaid: userData.totalPaid || userData.lastPaymentAmount || 0,
-                lastReminderChannel: userData.lastReminderChannel || null, // 🆕
+                lastReminderChannel: userData.lastReminderChannel || null,
               };
             })
           );
@@ -626,11 +623,9 @@ export default function AdminDashboardPage() {
     return `${greeting}\n\nVotre abonnement *Billio* expire dans *${user.daysLeft} jour(s)*. Pensez à renouveler dès maintenant pour éviter toute interruption de service.${instructions}`;
   };
 
-  // 🔄 MODIFIÉ : cible désormais aussi les clients sans téléphone (fallback email garanti)
   const isReminderTarget = (u) =>
     (!!u.phone || isValidEmail(u.email)) && (u.status === "expired" || u.daysLeft <= 3);
 
-  // 🔄 MODIFIÉ : choix automatique du canal (WhatsApp en priorité, sinon Email)
   const handleSendReminder = async (user) => {
     const channel = user.phone ? "whatsapp" : (isValidEmail(user.email) ? "email" : null);
     if (!channel) {
@@ -663,7 +658,6 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // ✅ Synchronisation avec la Cloud Function (évite un double envoi le même jour)
       await updateDoc(doc(db, "users", user.uid), {
         lastReminderSentAt: serverTimestamp(),
         lastReminderChannel: channel,
@@ -677,7 +671,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // 🔄 MODIFIÉ : sépare les cibles WhatsApp (bulk natif) des cibles Email (séquentiel)
   const handleBulkReminder = async () => {
     const targets = usersList.filter(isReminderTarget);
 
@@ -754,7 +747,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // ── ✅ RESTAURÉ : Teste la connexion à l'API AfriMsg (WhatsApp) ──
   const handleTestAfrimsg = async (e) => {
     e.preventDefault();
     setIsTestingAfrimsg(true);
@@ -777,7 +769,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // 🆕 Teste la connexion à Resend (Email) — complète le test WhatsApp
   const handleTestEmail = async (e) => {
     e.preventDefault();
     setIsTestingEmail(true);
@@ -1091,7 +1082,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* 🆕 MINI-STATS : Dernier passage automatique de rappel */}
+              {/* MINI-STATS : Dernier passage automatique de rappel */}
               {reminderStats && (
                 <div className="mb-8 bg-slate-900/40 border border-slate-800 rounded-2xl p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
@@ -1495,7 +1486,7 @@ export default function AdminDashboardPage() {
           {activeTab === "help" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               
-              {/* ✅ RESTAURÉ : Test de connexion AfriMsg + 🆕 Test Resend (Email) */}
+              {/* Test de connexion AfriMsg + Test Resend (Email) */}
               <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
                 <div className="mb-6">
                   <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
@@ -1510,7 +1501,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Test WhatsApp — RESTAURÉ */}
+                  {/* Test WhatsApp */}
                   <div className="space-y-3 p-4 bg-slate-900/30 rounded-2xl border border-slate-700">
                     <label className="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
                       <IconWhatsApp className="w-4 h-4" /> Canal WhatsApp (AfriMsg)
@@ -1566,7 +1557,7 @@ export default function AdminDashboardPage() {
                     </form>
                   </div>
 
-                  {/* 🆕 Test Email (Resend) — bonus, complète le test WhatsApp */}
+                  {/* Test Email (Resend) */}
                   <div className="space-y-3 p-4 bg-slate-900/30 rounded-2xl border border-slate-700">
                     <label className="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
                       <IconMail className="w-4 h-4" /> Canal Email (Resend) — Fallback

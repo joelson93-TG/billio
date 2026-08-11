@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { 
+  signInWithEmailAndPassword, 
+  sendPasswordResetEmail,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence
+} from "firebase/auth";
 import { auth } from "@/firebase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -10,6 +16,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true); // 🆕 coché par défaut
   const [error, setError] = useState("");
   const [message, setMessage] = useState(""); 
   const [isLoading, setIsLoading] = useState(false);
@@ -21,6 +28,14 @@ export default function LoginPage() {
     setError("");
     setMessage("");
     try {
+      // 🆕 Définition de la persistance AVANT la connexion
+      // Local = session conservée même après fermeture du navigateur
+      // Session = session effacée à la fermeture du navigateur/onglet
+      await setPersistence(
+        auth,
+        rememberMe ? browserLocalPersistence : browserSessionPersistence
+      );
+
       await signInWithEmailAndPassword(auth, email, password);
       router.push("/dashboard");
     } catch (err) {
@@ -148,6 +163,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
                   className="px-4 flex items-center text-gray-400 hover:text-blue-600 focus:outline-none transition-colors"
                 >
                   {showPassword ? (
@@ -162,6 +178,24 @@ export default function LoginPage() {
                   )}
                 </button>
               </div>
+            </div>
+
+            {/* 🆕 Case "Se souvenir de moi" */}
+            <div className="flex items-center gap-2.5">
+              <input
+                id="rememberMe"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={isLoading}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+              <label
+                htmlFor="rememberMe"
+                className="text-sm text-gray-700 font-medium cursor-pointer select-none"
+              >
+                Se souvenir de moi
+              </label>
             </div>
 
             <button
