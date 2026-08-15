@@ -30,6 +30,9 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
+  verification: {
+    google: "e19hUntJEDAMM2icULKOFXgxWN5uMVqVXX_dgTnozIU",
+  },
   openGraph: {
     title: "Billio — Facturation moderne pour entrepreneurs africains",
     description:
