@@ -1,21 +1,15 @@
-// app/page.tsx
+// app/(marketing)/page.tsx
 import type { Metadata } from "next";
 import { doc, getDoc, collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { db } from "@/firebase";
 import LandingPageClient from "@/components/LandingPageClient";
 
-// Revalidation ISR : régénère la page toutes les heures (évite de taper
-// Firestore à chaque requête tout en gardant un contenu à jour).
 export const revalidate = 3600;
 
 const SITE_URL = "https://billio.jblessconsulting.com";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: {
-    default: "Billio — Logiciel de facturation en ligne pour entrepreneurs africains",
-    template: "%s | Billio",
-  },
+  title: "Billio — Logiciel de facturation en ligne pour entrepreneurs africains",
   description:
     "Créez des factures professionnelles conformes OHADA en 2 minutes. TVA 18% et RSPS calculées automatiquement, suivi des paiements en temps réel. Pensé pour le Togo, la Côte d'Ivoire et le Sénégal.",
   keywords: [
@@ -38,7 +32,7 @@ export const metadata: Metadata = {
     siteName: "Billio",
     images: [
       {
-        url: "/og-image.jpg", // à placer dans /public, 1200x630px
+        url: "/og-image.jpg",
         width: 1200,
         height: 630,
         alt: "Aperçu du tableau de bord Billio",
@@ -84,7 +78,6 @@ const DEFAULT_PRICING: PricingData = {
 const DEFAULT_DASHBOARD_IMAGE =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDQjEYxYXGxCrnL5wSnV81SofvfkfpfBBW_FcW4-8qsxtTNCXxRt33u7iG8xPZ7yW6S19Z6o_1zDu03NP3emAQlaCvHswLvyMCxS3xlzcTKlqxJMIaufarHCGbJhPh4eYp0ZrgijBjBk-8IiJQKpDwcY9IM1RCcxJat6Fk-38_cMC1ZSDraMIswGbRBgJ9PAdkWspKbRx_CUhcCLZwmidsexf9pxOKhNlKMsChjRlb4gpE5riRW91rvSsquo8NgkQ06Sgw";
 
-// Liste blanche de domaines autorisés pour l'iframe vidéo (sécurité)
 const ALLOWED_EMBED_HOSTS = ["youtube.com", "youtube-nocookie.com", "player.vimeo.com"];
 
 function isSafeEmbedUrl(url: string): boolean {
@@ -96,11 +89,6 @@ function isSafeEmbedUrl(url: string): boolean {
   }
 }
 
-/**
- * Récupère les données publiques (pricing, tutoriel, captures) côté serveur.
- * Toute erreur retombe silencieusement sur des valeurs par défaut :
- * la page ne doit jamais planter à cause d'un souci Firestore.
- */
 async function getInitialData() {
   let pricing: PricingData = DEFAULT_PRICING;
   let tutorial: TutorialData | null = null;

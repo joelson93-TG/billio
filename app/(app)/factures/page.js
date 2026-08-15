@@ -5,12 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from "firebase/firestore";
-import { auth, db } from "../../firebase";
+import { auth, db } from "@/firebase";
 import { useSubscription } from "@/components/SubscriptionProvider";
 
-// ============================================================
-// Toast notification (remplace les alert())
-// ============================================================
 const TOAST_DURATION = 4500;
 
 function Toast({ toast, onClose }) {
@@ -71,9 +68,6 @@ function Toast({ toast, onClose }) {
   );
 }
 
-// ============================================================
-// Modale de confirmation de suppression
-// ============================================================
 function DeleteConfirmModal({ open, invoice, onConfirm, onCancel, isDeleting }) {
   useEffect(() => {
     if (!open) return;
@@ -93,7 +87,6 @@ function DeleteConfirmModal({ open, invoice, onConfirm, onCancel, isDeleting }) 
         className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-gray-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Icône */}
         <div className="flex justify-center mb-4">
           <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-7 h-7 text-red-600" strokeWidth={2}>
@@ -141,9 +134,6 @@ function DeleteConfirmModal({ open, invoice, onConfirm, onCancel, isDeleting }) 
   );
 }
 
-// ============================================================
-// Helper : statut payé ?
-// ============================================================
 function isInvoicePaid(status) {
   const s = (status || "").toUpperCase().trim();
   return s === "PAYÉ" || s === "PAYEE" || s === "PAID";
@@ -160,11 +150,9 @@ export default function InvoicesListPage() {
   const [endDate, setEndDate] = useState("");
   const [toast, setToast] = useState(null);
 
-  // États modale suppression
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // États modale paiement
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [paymentAmountInput, setPaymentAmountInput] = useState("");
@@ -207,9 +195,6 @@ export default function InvoicesListPage() {
     }
   };
 
-  // ============================================================
-  // 🆕 Suppression avec blocage si facture réglée
-  // ============================================================
   const handleDeleteClick = (invoice) => {
     if (isExpired) {
       showToast("Votre période d'essai a expiré. Cette action est bloquée.", "error");
@@ -217,7 +202,6 @@ export default function InvoicesListPage() {
       return;
     }
 
-    // 🔒 BLOCAGE : refus de suppression si la facture est payée
     if (isInvoicePaid(invoice.status)) {
       showToast(
         `La facture ${invoice.number} est déjà réglée et ne peut pas être supprimée. Contactez l'administrateur si nécessaire.`,
@@ -227,7 +211,6 @@ export default function InvoicesListPage() {
       return;
     }
 
-    // Ouvrir la modale de confirmation
     setDeleteTarget(invoice);
   };
 
@@ -402,10 +385,8 @@ export default function InvoicesListPage() {
         @keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
       `}</style>
 
-      {/* Toast */}
       <Toast toast={toast} onClose={() => setToast(null)} />
 
-      {/* Modale suppression */}
       <DeleteConfirmModal
         open={!!deleteTarget}
         invoice={deleteTarget}
@@ -417,7 +398,7 @@ export default function InvoicesListPage() {
       <div className="max-w-7xl mx-auto">
 
         <div className="mb-6">
-          <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-blue-600 transition-colors">
+          <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-blue-600 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
@@ -447,7 +428,6 @@ export default function InvoicesListPage() {
           </Link>
         </div>
 
-        {/* Barre de recherche + filtres dates */}
         <div className="mb-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-200 flex flex-col md:flex-row items-center gap-4">
           <div className="flex items-center flex-1 w-full bg-gray-50 px-3 py-2.5 rounded-xl border border-gray-200">
             <svg className="w-5 h-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -482,7 +462,6 @@ export default function InvoicesListPage() {
           </div>
         </div>
 
-        {/* Tableau */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left border-collapse">
@@ -529,7 +508,6 @@ export default function InvoicesListPage() {
                         <td className="p-4 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-3 flex-nowrap">
 
-                            {/* Bouton Convertir / Encaisser */}
                             {isProforma ? (
                               <button
                                 onClick={() => handleConvertToInvoice(invoice)}
@@ -550,13 +528,11 @@ export default function InvoicesListPage() {
                                 Encaisser
                               </button>
                             ) : (
-                              // Placeholder invisible pour garder l'alignement
                               <div className="px-3 py-1.5 opacity-0 pointer-events-none text-xs select-none whitespace-nowrap">
                                 Encaisser
                               </div>
                             )}
 
-                            {/* Voir / Éditer */}
                             <Link
                               href={`/factures/${invoice.id}`}
                               className="text-blue-600 hover:text-blue-800 text-sm font-semibold whitespace-nowrap"
@@ -564,7 +540,6 @@ export default function InvoicesListPage() {
                               Voir / Éditer
                             </Link>
 
-                            {/* 🆕 Bouton Supprimer — désactivé visuellement si payée */}
                             {isPaid ? (
                               <span
                                 className="text-sm font-semibold whitespace-nowrap text-gray-300 cursor-not-allowed select-none"
@@ -602,7 +577,6 @@ export default function InvoicesListPage() {
         </div>
       </div>
 
-      {/* ── MODALE PAIEMENT ── */}
       {showPaymentModal && selectedInvoice && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-200 space-y-4">

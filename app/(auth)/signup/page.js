@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../../firebase";
+import { auth, db } from "../../../firebase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 

@@ -1,3 +1,4 @@
+// components/SidebarWrapper.tsx
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -6,10 +7,9 @@ import Sidebar from "./Sidebar";
 export default function SidebarWrapper() {
   const pathname = usePathname();
 
-  // ⭐ On ajoute "/" pour cacher la sidebar sur la landing page
-  const hideSidebarRoutes = ["/", "/login", "/signup"];
-
-  const shouldHideSidebar = hideSidebarRoutes.includes(pathname) || pathname?.startsWith("/admin");
+  // / (landing), /login et /signup sont gérés par les route groups (pas de sidebar).
+  // On conserve uniquement la règle pour l'espace admin.
+  const shouldHideSidebar = pathname?.startsWith("/admin");
 
   if (shouldHideSidebar) {
     return null;

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth } from "@/firebase"; // Ajustez ce chemin selon votre projet
+import { auth } from "@/firebase";
 import { useRouter } from "next/navigation";
 
 export default function Sidebar() {
@@ -12,7 +12,6 @@ export default function Sidebar() {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Vérification de l'administrateur à la connexion
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user && user.email === "admin@jblessconsulting.com") {
@@ -24,7 +23,6 @@ export default function Sidebar() {
     return () => unsubscribe();
   }, []);
 
-  // Déconnexion propre (Firebase + redirection)
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -35,7 +33,6 @@ export default function Sidebar() {
     }
   };
 
-  // Liste des menus avec "Centre d'aide" à la toute fin
   const navItems = [
     {
       name: "Tableau de bord",
@@ -81,7 +78,7 @@ export default function Sidebar() {
     {
       name: "Centre d'aide",
       fullName: "Centre d'aide",
-      href: "/centre-d-aide",
+      href: "/centre-de-aide",
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -93,16 +90,12 @@ export default function Sidebar() {
   return (
     <aside 
       className="z-50 shrink-0 print:hidden 
-                 /* --- Mobile: Navigation fixe tout en haut --- */
                  fixed top-0 left-0 right-0 h-16 flex flex-row items-center justify-between 
                  bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3
-                 
-                 /* --- Desktop: Barre latérale classique à gauche --- */
                  md:sticky md:top-0 md:h-screen md:w-64 md:flex-col md:justify-start 
                  md:bg-slate-900 md:border-b-0 md:border-r md:px-0 md:shadow-xl md:shadow-slate-900/10"
     >
       
-      {/* Logo & Marque */}
       <div className="flex items-center gap-2.5 shrink-0 md:h-16 md:px-6 md:border-b md:border-slate-800 md:w-full mr-2 md:mr-0">
         <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-sm shadow-sm">
           B
@@ -110,7 +103,6 @@ export default function Sidebar() {
         <span className="text-base sm:text-lg font-bold text-white tracking-tight hidden sm:block md:block">Billio.</span>
       </div>
       
-      {/* Menu principal */}
       <nav 
         aria-label="Menu principal" 
         className="flex-1 flex items-center md:flex-col md:justify-start md:items-stretch md:w-full 
@@ -138,7 +130,6 @@ export default function Sidebar() {
                     {item.icon}
                   </span>
                   
-                  {/* Libellé (Masqué sur mobile, visible sur desktop) */}
                   <span className="hidden md:inline text-sm font-medium leading-tight truncate">
                     {item.fullName || item.name}
                   </span>
@@ -149,10 +140,8 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      {/* Section Bas : Admin (si autorisé) + Déconnexion */}
       <div className="flex items-center shrink-0 ml-1 md:ml-0 md:p-4 md:border-t md:border-slate-800 md:w-full md:flex-col md:gap-2 md:items-stretch">
         
-        {/* Bouton Admin (Conditionnel) */}
         {isAdmin && (
           <Link 
             href="/admin" 
@@ -171,7 +160,6 @@ export default function Sidebar() {
           </Link>
         )}
 
-        {/* Bouton Déconnexion en rouge vif */}
         <button
           onClick={handleLogout}
           title="Déconnexion"

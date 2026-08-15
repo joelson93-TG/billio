@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, onSnapshot } from "firebase/firestore";
-import { auth, db } from "../../firebase";
+import { auth, db } from "../../../firebase";
 
 export default function ClientsPage() {
   const [user, setUser] = useState(null);

@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 
 export default function PageShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const noPaddingRoutes = ["/", "/login", "/signup"];
-  const noPadding = noPaddingRoutes.includes(pathname) || pathname?.startsWith("/admin");
+  
+  // /admin n'a pas besoin du padding standard du dashboard.
+  const noPadding = pathname?.startsWith("/admin");
 
   return (
     <main
