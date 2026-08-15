@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, updateDoc, deleteDoc, collection, getDocs } from "firebase/firestore";
-import { auth, db } from "../../../firebase";
+import { auth, db } from "@/firebase";
 
 function numberToWords(num) {
   if (num === null || num === undefined || isNaN(num)) return "0 (0) Franc CFA";

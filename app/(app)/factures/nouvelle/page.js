@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, getDocs, addDoc, doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../../../firebase";
+import { auth, db } from "@/firebase";
 import { useSubscription } from "@/components/SubscriptionProvider";
 
 function numberToWords(num) {
