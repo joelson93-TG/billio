@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { 
   collection, getDocs, doc, getDoc, addDoc, setDoc, updateDoc,
@@ -8,7 +8,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "@/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { FaWhatsapp, FaFacebookF, FaTiktok, FaGlobe, FaComments, FaTimes, FaPaperPlane } from "react-icons/fa";
+import { FaWhatsapp, FaFacebookF, FaTiktok, FaGlobe, FaComments, FaTimes, FaPaperPlane, FaRobot } from "react-icons/fa";
 
 // --- Helpers ---
 const cleanYouTubeEmbedUrl = (url) => {
@@ -28,7 +28,13 @@ function ChatBubble() {
   const [newMessage, setNewMessage] = useState("");
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isAiTyping, setIsAiTyping] = useState(false);
   const scrollRef = useRef(null);
+  const messagesRef = useRef(messages);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     setMounted(true);
@@ -95,6 +101,62 @@ function ChatBubble() {
     }
   }, [isChatOpen, user]);
 
+  // 🤖 Déclenche la réponse de l'IA après un message utilisateur
+  const triggerAiResponse = useCallback(async (userMessage) => {
+    if (!user) return;
+    setIsAiTyping(true);
+    try {
+      const chatDocSnap = await getDoc(doc(db, "chats", user.uid));
+      const aiEnabled = chatDocSnap.exists() ? chatDocSnap.data().aiEnabled !== false : true;
+
+      // Si un admin a repris la main manuellement sur cette conversation, l'IA reste silencieuse
+      if (!aiEnabled) {
+        setIsAiTyping(false);
+        return;
+      }
+
+      const res = await fetch("/api/chat/ai-reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMessage, history: messagesRef.current }),
+      });
+      const data = await res.json();
+
+      if (data.escalate) {
+        // Notifie l'admin en priorité + informe l'utilisateur poliment
+        await setDoc(doc(db, "chats", user.uid), {
+          needsHuman: true,
+          unreadByAdmin: increment(1),
+        }, { merge: true });
+
+        await addDoc(collection(db, "chats", user.uid, "messages"), {
+          text: "Je transmets votre question à un conseiller de notre équipe qui vous répondra sous peu. Merci de votre patience 🙏",
+          senderId: "ai",
+          isAdmin: false,
+          isAI: true,
+          timestamp: serverTimestamp(),
+        });
+      } else if (data.reply) {
+        await addDoc(collection(db, "chats", user.uid, "messages"), {
+          text: data.reply,
+          senderId: "ai",
+          isAdmin: false,
+          isAI: true,
+          timestamp: serverTimestamp(),
+        });
+        await setDoc(doc(db, "chats", user.uid), {
+          lastMessage: data.reply,
+          lastMessageAt: serverTimestamp(),
+          lastSenderIsAdmin: false,
+        }, { merge: true });
+      }
+    } catch (error) {
+      console.error("Erreur réponse IA :", error);
+    } finally {
+      setIsAiTyping(false);
+    }
+  }, [user]);
+
   const sendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !user) return;
@@ -106,6 +168,7 @@ function ChatBubble() {
         text: messageText,
         senderId: user.uid,
         isAdmin: false,
+        isAI: false,
         timestamp: serverTimestamp(),
       });
       // 2. Crée/Met à jour le document parent pour que l'admin voie la conversation
@@ -114,9 +177,11 @@ function ChatBubble() {
         lastMessage: messageText,
         lastMessageAt: serverTimestamp(),
         lastSenderIsAdmin: false,
-        unreadByAdmin: increment(1),
         unreadByUser: 0,
       }, { merge: true });
+
+      // 3. 🤖 Déclenche la réponse automatique de l'IA
+      triggerAiResponse(messageText);
     } catch (error) { console.error("Erreur envoi message :", error); }
   };
 
@@ -135,7 +200,7 @@ function ChatBubble() {
                 <h3 className="font-bold text-sm">Support Billio</h3>
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                  <p className="text-[10px] text-blue-100">En ligne</p>
+                  <p className="text-[10px] text-blue-100">Assistant IA + Équipe en ligne</p>
                 </div>
               </div>
             </div>
@@ -146,16 +211,42 @@ function ChatBubble() {
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
             {messages.length === 0 && (
               <div className="text-center py-10 px-6">
-                <p className="text-slate-400 text-sm">Posez-nous vos questions ici ! Notre équipe vous répondra directement.</p>
+                <FaRobot className="w-8 h-8 text-blue-300 mx-auto mb-3" />
+                <p className="text-slate-400 text-sm">
+                  Posez-nous vos questions ici ! Notre assistant IA vous répond instantanément, un conseiller humain prend le relais si nécessaire.
+                </p>
               </div>
             )}
             {messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.isAdmin ? 'justify-start' : 'justify-end'}`}>
-                <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm ${msg.isAdmin ? 'bg-white text-slate-800 border border-slate-200 rounded-bl-none' : 'bg-blue-600 text-white rounded-br-none'}`}>
-                  {msg.text}
+              <div key={msg.id} className={`flex ${msg.isAdmin || msg.isAI ? 'justify-start' : 'justify-end'}`}>
+                <div className="max-w-[85%]">
+                  {msg.isAI && (
+                    <div className="flex items-center gap-1 mb-1 ml-1">
+                      <FaRobot className="w-3 h-3 text-blue-400" />
+                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wide">Assistant IA</span>
+                    </div>
+                  )}
+                  <div className={`p-3 rounded-2xl text-sm shadow-sm ${
+                    msg.isAdmin
+                      ? 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'
+                      : msg.isAI
+                      ? 'bg-indigo-50 text-slate-800 border border-indigo-100 rounded-bl-none'
+                      : 'bg-blue-600 text-white rounded-br-none'
+                  }`}>
+                    {msg.text}
+                  </div>
                 </div>
               </div>
             ))}
+            {isAiTyping && (
+              <div className="flex justify-start">
+                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl rounded-bl-none px-4 py-3 flex gap-1 items-center">
+                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
+            )}
             <div ref={scrollRef} />
           </div>
           <form onSubmit={sendMessage} className="p-3 bg-white border-t flex gap-2 shrink-0">

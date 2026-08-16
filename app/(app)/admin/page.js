@@ -32,6 +32,11 @@ const IconArrowDown = () => <svg className="w-4 h-4" fill="none" stroke="current
 const IconUploadCloud = () => <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>;
 const IconWhatsApp = ({ className = "w-4 h-4" }) => <svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>;
 const IconMail = ({ className = "w-4 h-4" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>;
+const IconRobot = ({ className = "w-5 h-5" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6m-3-1v4m-7 5h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2zm3 5h.01M15 14h.01M8 18h8" />
+  </svg>
+);
 
 const formatChatTime = (timestamp) => {
   if (!timestamp?.toDate) return "...";
@@ -71,6 +76,26 @@ const resolvePlan = (userData, sub, computedStatus) => {
 
   return computedStatus === "active" ? "1month" : "Essai";
 };
+
+const DEFAULT_SYSTEM_PROMPT = `Tu es l'assistant virtuel de Billio, une plateforme de facturation en ligne pour entrepreneurs en Afrique de l'Ouest (Togo, Côte d'Ivoire, Sénégal).
+
+CONTEXTE PRODUIT :
+- Billio permet de créer des factures et proformas conformes aux normes OHADA
+- TVA 18% et RSPS calculées automatiquement
+- Suivi des paiements en temps réel
+- Personnalisation avec logo, cachet et signature
+- Essai gratuit de 30 jours, puis abonnement mensuel, semestriel ou annuel
+
+RÈGLES DE COMPORTEMENT :
+- Réponds toujours en français, de façon chaleureuse, concise et professionnelle (3-4 phrases maximum)
+- Si tu ne sais pas répondre avec certitude, ou si la question concerne un remboursement, un bug technique précis, une réclamation, ou une négociation commerciale, réponds UNIQUEMENT par le texte : [ESCALATE]
+- Ne donne jamais de prix exacts que tu n'es pas sûr à 100% — invite plutôt à consulter la page Tarifs
+- Encourage l'utilisateur à consulter le Centre d'Aide pour les tutoriels vidéo si pertinent`;
+
+const DEFAULT_ESCALATION_KEYWORDS = [
+  "remboursement", "rembourser", "bug", "erreur système", "plainte",
+  "urgent", "parler à un humain", "conseiller", "réclamation", "arnaque",
+];
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -132,6 +157,16 @@ export default function AdminDashboardPage() {
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [totalUnreadMessages, setTotalUnreadMessages] = useState(0);
   const chatScrollRef = useRef(null);
+  const [chatFilter, setChatFilter] = useState("all");
+  const [isUpdatingChatAi, setIsUpdatingChatAi] = useState(false);
+
+  const [aiConfig, setAiConfig] = useState({
+    enabled: true,
+    systemPrompt: DEFAULT_SYSTEM_PROMPT,
+    escalationKeywords: DEFAULT_ESCALATION_KEYWORDS,
+  });
+  const [isSavingAi, setIsSavingAi] = useState(false);
+  const [newKeyword, setNewKeyword] = useState("");
 
   // ── Authentification admin ──
   useEffect(() => {
@@ -169,6 +204,30 @@ export default function AdminDashboardPage() {
     }, (error) => {
       console.error("Erreur écoute stats rappels :", error);
     });
+    return () => unsub();
+  }, [isAdminVerified]);
+
+  // ── Config Assistant IA en TEMPS RÉEL ──
+  useEffect(() => {
+    if (!isAdminVerified) return;
+    const unsub = onSnapshot(
+      doc(db, "settings", "ai_assistant"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setAiConfig({
+            enabled: data.enabled ?? true,
+            systemPrompt: data.systemPrompt || DEFAULT_SYSTEM_PROMPT,
+            escalationKeywords: Array.isArray(data.escalationKeywords) && data.escalationKeywords.length
+              ? data.escalationKeywords
+              : DEFAULT_ESCALATION_KEYWORDS,
+          });
+        }
+      },
+      (error) => {
+        console.error("Erreur écoute config IA :", error);
+      }
+    );
     return () => unsub();
   }, [isAdminVerified]);
 
@@ -224,10 +283,6 @@ export default function AdminDashboardPage() {
               return {
                 uid: userDoc.id,
                 email: userData.email || companyData.email || "Non renseigné",
-                // 🆕 FIX : ajout de userData.whatsappNumber dans la chaîne de fallback
-                // pour que les nouveaux comptes (inscrits via le formulaire signup)
-                // soient bien détectés comme joignables par WhatsApp.
-                // Ordre de priorité conservé : company.phone > whatsappNumber > ancien champ phone
                 phone: companyData.phone || userData.whatsappNumber || userData.phone || "",
                 companyName: companyData.companyName || userData.businessName || "Entreprise non configurée",
                 status: computedStatus,
@@ -315,6 +370,7 @@ export default function AdminDashboardPage() {
         text: replyText,
         senderId: "admin",
         isAdmin: true,
+        isAI: false,
         timestamp: serverTimestamp(),
       });
       await setDoc(doc(db, "chats", selectedChatId), {
@@ -322,6 +378,8 @@ export default function AdminDashboardPage() {
         lastMessageAt: serverTimestamp(),
         lastSenderIsAdmin: true,
         unreadByUser: increment(1),
+        aiEnabled: false,
+        needsHuman: false,
       }, { merge: true });
       setReplyText("");
     } catch (error) {
@@ -329,6 +387,92 @@ export default function AdminDashboardPage() {
     } finally {
       setIsSendingReply(false);
     }
+  };
+
+  const handleTakeoverChat = async (chatId) => {
+    if (!chatId) return;
+    setIsUpdatingChatAi(true);
+    try {
+      await setDoc(doc(db, "chats", chatId), {
+        aiEnabled: false,
+        needsHuman: false,
+      }, { merge: true });
+    } catch (error) {
+      console.error("Erreur prise en main :", error);
+      alert("Impossible de prendre la main sur cette conversation");
+    } finally {
+      setIsUpdatingChatAi(false);
+    }
+  };
+
+  const handleReenableAi = async (chatId) => {
+    if (!chatId) return;
+    setIsUpdatingChatAi(true);
+    try {
+      await setDoc(doc(db, "chats", chatId), {
+        aiEnabled: true,
+        needsHuman: false,
+      }, { merge: true });
+    } catch (error) {
+      console.error("Erreur réactivation IA :", error);
+      alert("Impossible de réactiver l'IA sur cette conversation");
+    } finally {
+      setIsUpdatingChatAi(false);
+    }
+  };
+
+  const handleSaveAiConfig = async (e) => {
+    e.preventDefault();
+    setIsSavingAi(true);
+    try {
+      const keywords = (aiConfig.escalationKeywords || [])
+        .map((k) => String(k).trim())
+        .filter(Boolean);
+
+      await setDoc(doc(db, "settings", "ai_assistant"), {
+        enabled: !!aiConfig.enabled,
+        systemPrompt: (aiConfig.systemPrompt || "").trim() || DEFAULT_SYSTEM_PROMPT,
+        escalationKeywords: keywords.length ? keywords : DEFAULT_ESCALATION_KEYWORDS,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      alert("Configuration de l'assistant IA enregistrée !");
+    } catch (error) {
+      console.error("Erreur sauvegarde config IA :", error);
+      alert("Erreur lors de la sauvegarde de l'assistant IA");
+    } finally {
+      setIsSavingAi(false);
+    }
+  };
+
+  const handleResetAiDefaults = () => {
+    if (!confirm("Réinitialiser le prompt et les mots-clés aux valeurs par défaut ?")) return;
+    setAiConfig((prev) => ({
+      ...prev,
+      systemPrompt: DEFAULT_SYSTEM_PROMPT,
+      escalationKeywords: DEFAULT_ESCALATION_KEYWORDS,
+    }));
+  };
+
+  const handleAddKeyword = (e) => {
+    e.preventDefault();
+    const kw = newKeyword.trim().toLowerCase();
+    if (!kw) return;
+    if ((aiConfig.escalationKeywords || []).some((k) => String(k).toLowerCase() === kw)) {
+      setNewKeyword("");
+      return;
+    }
+    setAiConfig((prev) => ({
+      ...prev,
+      escalationKeywords: [...(prev.escalationKeywords || []), kw],
+    }));
+    setNewKeyword("");
+  };
+
+  const handleRemoveKeyword = (kw) => {
+    setAiConfig((prev) => ({
+      ...prev,
+      escalationKeywords: (prev.escalationKeywords || []).filter((k) => k !== kw),
+    }));
   };
 
   const loadHelpCenterData = async () => {
@@ -814,6 +958,22 @@ export default function AdminDashboardPage() {
 
   const selectedConversation = conversations.find(c => c.id === selectedChatId);
   const selectedClientInfo = selectedChatId ? getClientInfo(selectedChatId) : null;
+  const selectedAiEnabled = selectedConversation?.aiEnabled !== false;
+  const needsHumanCount = conversations.filter((c) => c.needsHuman).length;
+  const aiDisabledCount = conversations.filter((c) => c.aiEnabled === false).length;
+
+  const visibleConversations = conversations
+    .filter((conv) => {
+      if (chatFilter === "human") return !!conv.needsHuman;
+      if (chatFilter === "human-taken") return conv.aiEnabled === false;
+      if (chatFilter === "ai") return conv.aiEnabled !== false && !conv.needsHuman;
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.needsHuman && !b.needsHuman) return -1;
+      if (!a.needsHuman && b.needsHuman) return 1;
+      return 0;
+    });
 
   if (isLoading) {
     return (
@@ -832,7 +992,8 @@ export default function AdminDashboardPage() {
     { key: "pricing", label: "Grille Tarifaire", icon: <IconPricing /> },
     { key: "screenshots", label: "Diaporama Landing Page", icon: <IconImage /> },
     { key: "help", label: "Centre d'aide", icon: <IconHelp /> },
-    { key: "messages", label: "Messagerie", icon: <IconChat />, badge: totalUnreadMessages },
+    { key: "ai", label: "Assistant IA", icon: <IconRobot /> },
+    { key: "messages", label: "Messagerie", icon: <IconChat />, badge: totalUnreadMessages, extraBadge: needsHumanCount },
   ];
 
   const totalReminderSent = reminderStats
@@ -862,9 +1023,14 @@ export default function AdminDashboardPage() {
               >
                 {item.icon}
                 {item.label}
-                {item.badge > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">{item.badge}</span>
-                )}
+                <span className="ml-auto flex items-center gap-1">
+                  {item.extraBadge > 0 && (
+                    <span className="bg-amber-500 text-slate-950 text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">{item.extraBadge}</span>
+                  )}
+                  {item.badge > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">{item.badge}</span>
+                  )}
+                </span>
               </button>
             ))}
           </nav>
@@ -908,9 +1074,14 @@ export default function AdminDashboardPage() {
                   >
                     {item.icon}
                     {item.label}
-                    {item.badge > 0 && (
-                      <span className="ml-auto bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">{item.badge}</span>
-                    )}
+                    <span className="ml-auto flex items-center gap-1">
+                      {item.extraBadge > 0 && (
+                        <span className="bg-amber-500 text-slate-950 text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">{item.extraBadge}</span>
+                      )}
+                      {item.badge > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center">{item.badge}</span>
+                      )}
+                    </span>
                   </button>
                 ))}
               </nav>
@@ -937,8 +1108,8 @@ export default function AdminDashboardPage() {
           <div className="flex items-center gap-3 min-w-0">
             <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-slate-300 hover:text-white bg-slate-800/50 rounded-lg transition-colors relative shrink-0">
               <IconMenu />
-              {totalUnreadMessages > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">{totalUnreadMessages}</span>
+              {(totalUnreadMessages > 0 || needsHumanCount > 0) && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">{totalUnreadMessages + needsHumanCount}</span>
               )}
             </button>
 
@@ -948,6 +1119,7 @@ export default function AdminDashboardPage() {
               {activeTab === "pricing" && <><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] shrink-0"></span> <span className="truncate">Grille Tarifaire</span></>}
               {activeTab === "screenshots" && <><span className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.8)] shrink-0"></span> <span className="truncate">Diaporama Landing Page</span></>}
               {activeTab === "help" && <><span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.8)] shrink-0"></span> <span className="truncate">Centre d'aide</span></>}
+              {activeTab === "ai" && <><span className="w-2 h-2 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.8)] shrink-0"></span> <span className="truncate">Assistant IA</span></>}
               {activeTab === "messages" && <><span className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.8)] shrink-0"></span> <span className="truncate">Messagerie</span></>}
             </h1>
           </div>
@@ -1736,24 +1908,188 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
+          {/* TAB : ASSISTANT IA */}
+          {activeTab === "ai" && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className={`rounded-3xl p-5 border shadow-xl ${aiConfig.enabled ? "bg-[#0F172A] border-emerald-500/20" : "bg-[#0F172A] border-red-500/20"}`}>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Statut global</p>
+                  <p className={`text-2xl font-black ${aiConfig.enabled ? "text-emerald-400" : "text-red-400"}`}>
+                    {aiConfig.enabled ? "IA active" : "IA coupée"}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {aiConfig.enabled ? "Les nouveaux messages reçoivent une réponse automatique." : "Toutes les conversations escaladent vers un humain."}
+                  </p>
+                </div>
+                <div className="bg-[#0F172A] border border-amber-500/20 rounded-3xl p-5 shadow-xl">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Humain requis</p>
+                  <p className="text-2xl font-black text-amber-400">{needsHumanCount}</p>
+                  <p className="text-xs text-slate-500 mt-1">Conversations en attente d'un conseiller.</p>
+                </div>
+                <div className="bg-[#0F172A] border border-indigo-500/20 rounded-3xl p-5 shadow-xl">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">IA désactivée</p>
+                  <p className="text-2xl font-black text-indigo-400">{aiDisabledCount}</p>
+                  <p className="text-xs text-slate-500 mt-1">Fils repris manuellement par l'équipe.</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveAiConfig} className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl space-y-8">
+                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                  <div>
+                    <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
+                      <IconRobot className="w-6 h-6 text-violet-400" /> Configuration de l'assistant
+                    </h3>
+                    <p className="text-slate-400 text-sm mt-2 max-w-2xl">
+                      Ces réglages sont lus en temps réel par la route <span className="text-violet-300 font-mono text-xs">/api/chat/ai-reply</span>.
+                      Modifier le prompt ou les mots-clés n'exige aucun redéploiement.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAiConfig((prev) => ({ ...prev, enabled: !prev.enabled }))}
+                    className={`shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider border transition-all ${
+                      aiConfig.enabled
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                        : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${aiConfig.enabled ? "bg-emerald-400" : "bg-red-400"}`}></span>
+                    {aiConfig.enabled ? "Désactiver l'IA" : "Réactiver l'IA"}
+                  </button>
+                </div>
+
+                {!aiConfig.enabled && (
+                  <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
+                    L'assistant est coupé globalement. Chaque message utilisateur sera transmis à un conseiller humain.
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="block text-xs font-black text-slate-300 uppercase tracking-widest">Prompt système</label>
+                    <span className="text-[10px] text-slate-500 font-medium">{(aiConfig.systemPrompt || "").length} caractères</span>
+                  </div>
+                  <textarea
+                    value={aiConfig.systemPrompt}
+                    onChange={(e) => setAiConfig((prev) => ({ ...prev, systemPrompt: e.target.value }))}
+                    rows={16}
+                    className="w-full p-4 bg-slate-950/70 border border-slate-700 rounded-2xl text-slate-200 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-all font-mono leading-relaxed resize-y min-h-[280px]"
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    Le modèle doit répondre uniquement par <span className="text-amber-400 font-mono">[ESCALATE]</span> pour transférer à un humain.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="block text-xs font-black text-slate-300 uppercase tracking-widest">Mots-clés d'escalade</label>
+                  <p className="text-xs text-slate-500">
+                    Si le message client contient l'un de ces mots, l'API n'appelle pas Gemini et transmet directement à un humain.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(aiConfig.escalationKeywords || []).map((kw) => (
+                      <span key={kw} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-xs text-slate-200">
+                        {kw}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveKeyword(kw)}
+                          className="text-slate-500 hover:text-red-400 transition-colors"
+                          title="Retirer"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    {(aiConfig.escalationKeywords || []).length === 0 && (
+                      <span className="text-xs text-slate-500 italic">Aucun mot-clé — les valeurs par défaut seront utilisées à l'enregistrement.</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={newKeyword}
+                      onChange={(e) => setNewKeyword(e.target.value)}
+                      placeholder="Ajouter un mot-clé (ex: facture impayée)"
+                      className="flex-1 p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddKeyword}
+                      className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-sm border border-slate-700 shrink-0"
+                    >
+                      Ajouter
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row gap-3">
+                  <button
+                    type="button"
+                    onClick={handleResetAiDefaults}
+                    className="sm:w-auto px-5 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl text-sm border border-slate-700"
+                  >
+                    Restaurer les défauts
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingAi}
+                    className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black rounded-2xl text-sm shadow-xl shadow-violet-600/30 transition-all transform hover:scale-[1.01] active:scale-[0.99] flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSavingAi ? (
+                      <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Sauvegarde...</>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        Enregistrer la configuration IA
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
           {/* TAB : MESSAGERIE */}
           {activeTab === "messages" && (
             <div className="bg-[#0F172A] border border-slate-800 rounded-3xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
               <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] h-[calc(100vh-220px)] min-h-[500px]">
                 
                 <div className={`border-r border-slate-800 flex-col bg-slate-950/30 ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
-                  <div className="p-5 border-b border-slate-800">
+                  <div className="p-5 border-b border-slate-800 space-y-3">
                     <h3 className="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2">
                       <IconChat /> Conversations ({conversations.length})
                     </h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { key: "all", label: "Tous" },
+                        { key: "human", label: `Humain ${needsHumanCount ? `(${needsHumanCount})` : ""}` },
+                        { key: "human-taken", label: "Repris" },
+                        { key: "ai", label: "IA active" },
+                      ].map((f) => (
+                        <button
+                          key={f.key}
+                          type="button"
+                          onClick={() => setChatFilter(f.key)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors ${
+                            chatFilter === f.key
+                              ? "bg-blue-600 text-white border-blue-500"
+                              : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    {!aiConfig.enabled && (
+                      <p className="text-[10px] text-red-400 font-semibold">IA globale désactivée — tout remonte vers vous.</p>
+                    )}
                   </div>
                   <div className="flex-1 overflow-y-auto">
-                    {conversations.length === 0 ? (
+                    {visibleConversations.length === 0 ? (
                       <div className="text-center py-12 px-4 text-slate-500 text-sm italic">
-                        Aucun message reçu pour le moment.
+                        {conversations.length === 0 ? "Aucun message reçu pour le moment." : "Aucune conversation dans ce filtre."}
                       </div>
                     ) : (
-                      conversations.map((conv) => {
+                      visibleConversations.map((conv) => {
                         const clientInfo = getClientInfo(conv.id);
                         const displayName = clientInfo?.companyName || conv.userEmail || "Client inconnu";
                         const isSelected = selectedChatId === conv.id;
@@ -1761,7 +2097,7 @@ export default function AdminDashboardPage() {
                           <button
                             key={conv.id}
                             onClick={() => setSelectedChatId(conv.id)}
-                            className={`w-full text-left p-4 border-b border-slate-800/50 transition-colors flex items-start gap-3 ${isSelected ? "bg-blue-600/10 border-l-4 border-l-blue-500" : "hover:bg-slate-800/40 border-l-4 border-l-transparent"}`}
+                            className={`w-full text-left p-4 border-b border-slate-800/50 transition-colors flex items-start gap-3 ${isSelected ? "bg-blue-600/10 border-l-4 border-l-blue-500" : conv.needsHuman ? "bg-amber-500/5 hover:bg-amber-500/10 border-l-4 border-l-amber-500" : "hover:bg-slate-800/40 border-l-4 border-l-transparent"}`}
                           >
                             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
                               {displayName.charAt(0).toUpperCase()}
@@ -1775,6 +2111,18 @@ export default function AdminDashboardPage() {
                                 {conv.lastSenderIsAdmin && <span className="text-blue-400">Vous : </span>}
                                 {conv.lastMessage}
                               </p>
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                {conv.needsHuman && (
+                                  <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/20">Humain requis</span>
+                                )}
+                                {conv.aiEnabled === false ? (
+                                  <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">IA coupée</span>
+                                ) : (
+                                  <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 inline-flex items-center gap-1">
+                                    <IconRobot className="w-3 h-3" /> IA
+                                  </span>
+                                )}
+                              </div>
                             </div>
                             {conv.unreadByAdmin > 0 && (
                               <span className="bg-red-500 text-white text-[10px] font-black rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shrink-0">
@@ -1798,46 +2146,87 @@ export default function AdminDashboardPage() {
                         <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
                           {(selectedClientInfo?.companyName || selectedConversation?.userEmail || "?").charAt(0).toUpperCase()}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <h4 className="font-bold text-white text-sm truncate">{selectedClientInfo?.companyName || selectedConversation?.userEmail || selectedChatId}</h4>
                           <p className="text-xs text-slate-400 truncate">{selectedClientInfo?.email || selectedConversation?.userEmail}</p>
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 shrink-0">
+                          {selectedConversation?.needsHuman && (
+                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/20">Humain requis</span>
+                          )}
+                          {selectedAiEnabled ? (
+                            <button
+                              type="button"
+                              onClick={() => handleTakeoverChat(selectedChatId)}
+                              disabled={isUpdatingChatAi}
+                              className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 disabled:opacity-50"
+                            >
+                              Prendre la main
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleReenableAi(selectedChatId)}
+                              disabled={isUpdatingChatAi}
+                              className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/20 disabled:opacity-50"
+                            >
+                              Réactiver l'IA
+                            </button>
+                          )}
                         </div>
                       </div>
 
                       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
                         {chatMessages.map((msg) => (
                           <div key={msg.id} className={`flex ${msg.isAdmin ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[80%] md:max-w-[70%] p-3 rounded-2xl text-sm shadow-sm ${
-                              msg.isAdmin 
-                                ? 'bg-blue-600 text-white rounded-br-none' 
-                                : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-none'
-                            }`}>
-                              {msg.text}
+                            <div className="max-w-[80%] md:max-w-[70%]">
+                              {msg.isAI && (
+                                <div className="flex items-center gap-1 mb-1 ml-1">
+                                  <IconRobot className="w-3 h-3 text-indigo-400" />
+                                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wide">Assistant IA</span>
+                                </div>
+                              )}
+                              <div className={`p-3 rounded-2xl text-sm shadow-sm ${
+                                msg.isAdmin 
+                                  ? 'bg-blue-600 text-white rounded-br-none' 
+                                  : msg.isAI
+                                  ? 'bg-indigo-500/15 text-indigo-100 border border-indigo-500/30 rounded-bl-none'
+                                  : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-none'
+                              }`}>
+                                {msg.text}
+                              </div>
                             </div>
                           </div>
                         ))}
                         <div ref={chatScrollRef} />
                       </div>
 
-                      <form onSubmit={handleSendReply} className="p-3 md:p-4 border-t border-slate-800 flex gap-2 bg-slate-900/50">
-                        <input
-                          type="text"
-                          value={replyText}
-                          onChange={(e) => setReplyText(e.target.value)}
-                          placeholder="Écrire une réponse..."
-                          className="flex-1 p-3 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all min-w-0"
-                        />
-                        <button
-                          type="submit"
-                          disabled={isSendingReply}
-                          className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl transition-all disabled:opacity-50 shrink-0"
-                        >
-                          {isSendingReply ? (
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                          ) : (
-                            <IconSend />
-                          )}
-                        </button>
+                      <form onSubmit={handleSendReply} className="p-3 md:p-4 border-t border-slate-800 bg-slate-900/50 space-y-2">
+                        {selectedAiEnabled && (
+                          <p className="text-[10px] text-amber-400 font-medium px-1">
+                            Envoyer une réponse coupe automatiquement l'IA sur cette conversation.
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            placeholder="Écrire une réponse..."
+                            className="flex-1 p-3 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all min-w-0"
+                          />
+                          <button
+                            type="submit"
+                            disabled={isSendingReply}
+                            className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl transition-all disabled:opacity-50 shrink-0"
+                          >
+                            {isSendingReply ? (
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            ) : (
+                              <IconSend />
+                            )}
+                          </button>
+                        </div>
                       </form>
                     </>
                   ) : (
