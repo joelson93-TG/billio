@@ -5,6 +5,14 @@ import { db } from "@/firebase";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+// 🔁 Modèles essayés dans l'ordre : si l'un renvoie 404, on passe au suivant
+const MODEL_CANDIDATES = [
+  "gemini-2.0-flash",
+  "gemini-2.5-flash",
+  "gemini-flash-latest",
+  "gemini-2.0-flash-001",
+];
+
 const DEFAULT_SYSTEM_PROMPT = `Tu es l'assistant virtuel de Billio, une plateforme de facturation en ligne pour entrepreneurs en Afrique de l'Ouest (Togo, Côte d'Ivoire, Sénégal).
 
 CONTEXTE PRODUIT :
@@ -48,11 +56,51 @@ async function getAiConfig() {
   };
 }
 
+// Essaie chaque modèle jusqu'à ce que l'un réponde
+async function generateWithFallback({ systemPrompt, history, message }) {
+  let lastError = null;
+
+  for (const modelName of MODEL_CANDIDATES) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: systemPrompt,
+      });
+
+      const chat = model.startChat({
+        history,
+        generationConfig: { maxOutputTokens: 300, temperature: 0.4 },
+      });
+
+      const result = await chat.sendMessage(message);
+      const text = result.response.text().trim();
+
+      console.log(`[AI] ✅ Modèle utilisé : ${modelName}`);
+      return { text, modelUsed: modelName };
+    } catch (err) {
+      lastError = err;
+      const msg = String(err?.message || "");
+      // 404 / modèle non supporté → on tente le suivant
+      if (msg.includes("404") || msg.includes("not found") || msg.includes("not supported")) {
+        console.warn(`[AI] ⏭️ Modèle indisponible (${modelName}), essai suivant...`);
+        continue;
+      }
+      // Autre erreur (quota, clé invalide, historique malformé) → inutile d'insister
+      throw err;
+    }
+  }
+
+  throw lastError || new Error("Aucun modèle Gemini disponible");
+}
+
 export async function POST(req) {
   try {
     if (!process.env.GEMINI_API_KEY) {
       console.error("[AI] GEMINI_API_KEY manquante");
-      return NextResponse.json({ escalate: true, reply: null });
+      return NextResponse.json({
+        escalate: false,
+        reply: "⚠️ Configuration manquante : GEMINI_API_KEY absente de .env.local",
+      });
     }
 
     const { message, history } = await req.json();
@@ -67,7 +115,7 @@ export async function POST(req) {
       return NextResponse.json({ escalate: true, reply: null });
     }
 
-    // Détection rapide par mots-clés (économise des appels API inutiles)
+    // Filtre par mots-clés (évite un appel API inutile)
     const lowerMsg = message.toLowerCase();
     const hasEscalationKeyword = config.escalationKeywords.some((k) =>
       lowerMsg.includes(String(k).toLowerCase())
@@ -76,8 +124,8 @@ export async function POST(req) {
       return NextResponse.json({ escalate: true, reply: null });
     }
 
-    // Historique limité aux 6 derniers messages, format Gemini (user/model)
-    const recentHistory = (history || [])
+    // 🛡️ Historique nettoyé : alternance stricte user ⇄ model, commence par user, finit par model
+    const rawHistory = (history || [])
       .slice(-6)
       .filter((m) => m.text && m.text.trim())
       .map((m) => ({
@@ -85,26 +133,21 @@ export async function POST(req) {
         parts: [{ text: m.text }],
       }));
 
-    // Gemini exige que le premier message de l'historique soit "user"
-    while (recentHistory.length > 0 && recentHistory[0].role !== "user") {
-      recentHistory.shift();
+    const cleanHistory = [];
+    for (const item of rawHistory) {
+      if (cleanHistory.length === 0 && item.role !== "user") continue;
+      if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === item.role) continue;
+      cleanHistory.push(item);
+    }
+    if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === "user") {
+      cleanHistory.pop();
     }
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      systemInstruction: config.systemPrompt,
+    const { text: reply } = await generateWithFallback({
+      systemPrompt: config.systemPrompt,
+      history: cleanHistory,
+      message,
     });
-
-    const chat = model.startChat({
-      history: recentHistory,
-      generationConfig: {
-        maxOutputTokens: 300,
-        temperature: 0.4,
-      },
-    });
-
-    const result = await chat.sendMessage(message);
-    const reply = result.response.text().trim();
 
     if (!reply || reply.includes("[ESCALATE]")) {
       return NextResponse.json({ escalate: true, reply: null });
@@ -112,8 +155,13 @@ export async function POST(req) {
 
     return NextResponse.json({ escalate: false, reply });
   } catch (error) {
-    console.error("[AI] Erreur réponse IA :", error);
-    // En cas d'erreur technique, on escalade vers un humain plutôt que de planter
-    return NextResponse.json({ escalate: true, reply: null });
+    console.error("[AI] Erreur Gemini :", error);
+    // ⚙️ Mode debug : affiche l'erreur dans le chat.
+    // Une fois que tout fonctionne, remplace ce bloc par :
+    // return NextResponse.json({ escalate: true, reply: null });
+    return NextResponse.json({
+      escalate: false,
+      reply: `⚠️ Erreur Gemini : ${error?.message || error}`,
+    });
   }
 }
