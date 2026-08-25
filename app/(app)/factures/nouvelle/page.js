@@ -236,22 +236,97 @@ function SignatureBlock({ stampSignatureUrl }) {
       <p className="font-bold text-[11px] print:text-[10px] underline mb-2">LE RESPONSABLE</p>
       {stampSignatureUrl ? (
         <div style={{ width: "160px", height: "80px" }} className="flex items-center justify-center">
-          <img
-            src={stampSignatureUrl}
-            alt="Cachet & Signature"
-            crossOrigin="anonymous"
-            className="stamp-signature-img"
-            style={{ maxWidth: "160px", maxHeight: "80px", objectFit: "contain", display: "block" }}
-          />
+          <img src={stampSignatureUrl} alt="Cachet & Signature" crossOrigin="anonymous" className="stamp-signature-img" style={{ maxWidth: "160px", maxHeight: "80px", objectFit: "contain", display: "block" }} />
         </div>
       ) : (
-        <div
-          className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[9px] print:text-[8px] text-gray-400 italic"
-          style={{ width: "160px", height: "70px" }}
-        >
+        <div className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[9px] print:text-[8px] text-gray-400 italic" style={{ width: "160px", height: "70px" }}>
           Cachet &amp; Signature
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// COMPOSANT EN-TÊTE OPTION 2 — réutilisable
+// ============================================================
+function HeaderOption2({ companyData, mainColor }) {
+  return (
+    <div
+      className="header-option2"
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        borderBottom: `2px solid ${mainColor}`,
+        paddingBottom: "8px",
+        marginBottom: "6px",
+        position: "relative",
+        zIndex: 10,
+        gap: "12px",
+        flexWrap: "nowrap",
+        width: "100%",
+      }}
+    >
+      {/* GAUCHE : logo + nom société + coordonnées */}
+      <div
+        className="header-option2-left"
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "10px",
+          flex: "0 0 auto",
+          minWidth: 0,
+        }}
+      >
+        {companyData?.logoUrl && (
+          <img
+            src={companyData.logoUrl}
+            alt="Logo"
+            crossOrigin="anonymous"
+            className="logo-img-option2"
+            style={{ height: "80px", width: "auto", maxWidth: "150px", objectFit: "contain", display: "block", flexShrink: 0 }}
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
+          />
+        )}
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <p style={{ fontSize: "13px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: "0 0 2px 0", lineHeight: 1.2 }}>
+            {companyData?.companyName || "SOCIÉTÉ"}
+          </p>
+          {companyData?.address && (
+            <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 1px 0", lineHeight: 1.3 }}>
+              {companyData.address}
+            </p>
+          )}
+          <p style={{ fontSize: "10px", color: "#4b5563", margin: 0, lineHeight: 1.3 }}>
+            {companyData?.phone}{companyData?.email ? ` | ${companyData.email}` : ""}
+          </p>
+        </div>
+      </div>
+
+      {/* DROITE : NIF / RCCM en haut, services en dessous — ALIGNÉS À GAUCHE */}
+      <div
+        className="header-option2-right"
+        style={{
+          flex: "1 1 auto",
+          textAlign: "left",
+          paddingLeft: "12px",
+          minWidth: 0,
+          maxWidth: "240px",
+          marginLeft: "auto",
+        }}
+      >
+        <p style={{ fontSize: "10px", fontWeight: "700", color: "#111827", margin: "0 0 3px 0", whiteSpace: "nowrap" }}>
+          NIF : {companyData?.nif || "---"} | RCCM : {companyData?.rccm || "---"}
+        </p>
+        {companyData?.services && (
+          <p style={{ fontSize: "9px", color: "#4b5563", fontStyle: "italic", margin: 0, lineHeight: "1.5", whiteSpace: "pre-line" }}>
+            {companyData.services}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -283,7 +358,7 @@ export default function NewInvoicePage() {
   const [tvaRate, setTvaRate] = useState(18);
   const [hasRsps, setHasRsps] = useState(false);
   const [rspsRate, setRspsRate] = useState(5);
-  const [printOption, setPrintOption] = useState("1");
+  const [printOption, setPrintOption] = useState("1"); // 🆕 sélecteur dans le formulaire
 
   const showToast = useCallback((message, type = "success", title) => {
     setToast({ message, type, title });
@@ -508,11 +583,13 @@ export default function NewInvoicePage() {
       <main className="print-hidden max-w-4xl mx-auto mt-8 bg-white p-4 md:p-8 rounded-2xl shadow-sm border border-gray-200">
         <form onSubmit={handleOpenPreview} className="space-y-6">
 
+          {/* TYPE DE DOCUMENT */}
           <div className="flex gap-4 p-1 bg-gray-100 rounded-xl w-max">
             <button type="button" onClick={() => handleTypeChange("FACTURE")} className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${documentType === "FACTURE" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Facture Définitive</button>
             <button type="button" onClick={() => handleTypeChange("PROFORMA")} className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${documentType === "PROFORMA" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Facture Proforma</button>
           </div>
 
+          {/* CLIENT / NUMÉRO / DATE */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Client *</label>
@@ -532,22 +609,33 @@ export default function NewInvoicePage() {
             </div>
           </div>
 
-          {/* CHAMP TITRE */}
-          <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
-              Titre / Objet du document <span className="text-gray-400 font-normal normal-case">(optionnel)</span>
-            </label>
-            <input
-              type="text"
-              value={invoiceTitle}
-              onChange={(e) => setInvoiceTitle(e.target.value)}
-              placeholder="Ex : Travaux de rénovation bureau, Fournitures informatiques..."
-              className="w-full p-3 border rounded-xl bg-gray-50 text-sm focus:bg-white transition-colors"
-              maxLength={120}
-            />
-            <p className="text-[11px] text-gray-400 mt-1">Ce titre apparaîtra juste avant le tableau sur la facture imprimée.</p>
+          {/* 🆕 SÉLECTEUR D'EN-TÊTE dans la nouvelle facture */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                Mise en page de l'en-tête
+              </label>
+              <select
+                value={printOption}
+                onChange={(e) => setPrintOption(e.target.value)}
+                className="w-full p-3 border rounded-xl bg-gray-50 text-sm focus:bg-white transition-colors cursor-pointer"
+              >
+                <option value="1">Option 1 — Classique (Logo grand + Services)</option>
+                <option value="2">Option 2 — Compact (Logo + Coordonnées + NIF/Services)</option>
+              </select>
+              <p className="text-[11px] text-gray-400 mt-1">Choisissez la mise en page souhaitée pour l'en-tête de la facture.</p>
+            </div>
+            {/* TITRE */}
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                Titre / Objet <span className="text-gray-400 font-normal normal-case">(optionnel)</span>
+              </label>
+              <input type="text" value={invoiceTitle} onChange={(e) => setInvoiceTitle(e.target.value)} placeholder="Ex : Travaux de rénovation bureau..." className="w-full p-3 border rounded-xl bg-gray-50 text-sm focus:bg-white transition-colors" maxLength={120} />
+              <p className="text-[11px] text-gray-400 mt-1">Apparaîtra juste avant le tableau sur la facture.</p>
+            </div>
           </div>
 
+          {/* LIGNES DE PRESTATIONS */}
           <div className="pt-4 border-t">
             <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide mb-3">Désignation des prestations / produits</h2>
             {items.map((item) => (
@@ -562,6 +650,7 @@ export default function NewInvoicePage() {
             <button type="button" onClick={handleAddItem} className="px-4 py-2 border border-blue-600 text-blue-600 hover:bg-blue-50 rounded-xl text-sm font-medium mt-2 transition-colors cursor-pointer">+ Ajouter une ligne</button>
           </div>
 
+          {/* REMISE / TVA / RSPS */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t bg-gray-50 p-4 rounded-xl">
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Remise (Montant F CFA)</label>
@@ -588,6 +677,7 @@ export default function NewInvoicePage() {
             </div>
           </div>
 
+          {/* RÉCAPITULATIF */}
           <div className="flex justify-end pt-4">
             <div className="w-full sm:w-80 space-y-2 text-sm">
               <div className="flex justify-between text-gray-600"><span>Total Brut :</span><span>{totalBrut.toLocaleString("fr-FR")} F CFA</span></div>
@@ -626,14 +716,47 @@ export default function NewInvoicePage() {
                 border-radius: 0 !important; border: none !important; box-shadow: none !important;
               }
               .invoice-content { position: relative !important; }
+
+              /* OPTION 2 — forcé en row, no-wrap */
+              .header-option2 {
+                display: flex !important;
+                flex-direction: row !important;
+                justify-content: space-between !important;
+                align-items: flex-start !important;
+                border-bottom: 2px solid ${mainColor} !important;
+                padding-bottom: 4px !important;
+                margin-bottom: 4px !important;
+                position: relative !important;
+                z-index: 10 !important;
+                gap: 12px !important;
+                flex-wrap: nowrap !important;
+                width: 100% !important;
+              }
+              .header-option2-left {
+                display: flex !important;
+                flex-direction: row !important;
+                align-items: center !important;
+                gap: 8px !important;
+                flex: 0 0 auto !important;
+              }
+              .header-option2-right {
+                text-align: left !important;
+                flex: 1 1 auto !important;
+                padding-left: 12px !important;
+                min-width: 0 !important;
+                max-width: 240px !important;
+                margin-left: auto !important;
+              }
+              .logo-img-option2 { height: 75px !important; width: auto !important; max-width: 150px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
+
+              /* OPTION 1 */
               .header-grid-option1 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 14px !important; border-bottom: 1px solid #1f2937 !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; align-items: center !important; }
-              .header-option2 { display: flex !important; flex-direction: row !important; justify-content: space-between !important; align-items: center !important; border-bottom: 2px solid ${mainColor} !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; gap: 12px !important; flex-wrap: wrap !important; }
+              .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
+              .logo-img-option1 { height: 210px !important; width: auto !important; max-width: 420px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
+
               .invoice-signature-wrapper { min-height: 94mm !important; display: flex !important; flex-direction: column !important; justify-content: flex-end !important; }
               .invoice-signature { margin-bottom: 3mm !important; }
               .invoice-footer { margin-top: 0 !important; padding-bottom: 1mm !important; }
-              .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
-              .logo-img-option1 { height: 210px !important; width: auto !important; max-width: 420px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
-              .logo-img-option2 { height: 110px !important; width: auto !important; max-width: 220px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
               .stamp-signature-img { max-width: 160px !important; max-height: 80px !important; object-fit: contain !important; display: block !important; }
               .invoice-title-row { display: block !important; }
             }
@@ -651,36 +774,24 @@ export default function NewInvoicePage() {
                 )}
 
                 {/* EN-TÊTE */}
-                {activePrintOption === "2" ? (
-                  <div className="header-option2" style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${mainColor}`, paddingBottom: "8px", marginBottom: "8px", position: "relative", zIndex: 10, gap: "12px", flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                      {companyData?.logoUrl && (<img src={companyData.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option2" style={{ height: "110px", width: "auto", maxWidth: "220px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />)}
-                      <div>
-                        <p style={{ fontSize: "14px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: 0 }}>{companyData?.companyName || "SOCIÉTÉ"}</p>
-                        <p style={{ fontSize: "11px", color: "#4b5563", margin: "2px 0 0 0" }}>{companyData?.address}</p>
-                        <p style={{ fontSize: "11px", color: "#4b5563", margin: "1px 0 0 0" }}>{companyData?.phone}{companyData?.email ? ` | ${companyData.email}` : ""}</p>
+                {activePrintOption === "2"
+                  ? <HeaderOption2 companyData={companyData} mainColor={mainColor} />
+                  : (
+                    <div className="header-grid-option1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", borderBottom: "1px solid #1f2937", paddingBottom: "8px", marginBottom: "0", position: "relative", zIndex: 10, alignItems: "center" }}>
+                      <div className="logo-container-option1" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "210px", width: "100%", overflow: "hidden", flexShrink: 0 }}>
+                        {companyData?.logoUrl ? (
+                          <img src={companyData.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option1" style={{ height: "210px", width: "auto", maxWidth: "420px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                        ) : (
+                          <span style={{ fontSize: "22px", fontWeight: "900", color: "#1f2937", letterSpacing: "0.05em" }}>{companyData?.companyName || "LOGO"}</span>
+                        )}
+                      </div>
+                      <div style={{ borderLeft: `4px solid ${mainColor}`, paddingLeft: "12px", display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "center" }}>
+                        <p style={{ fontWeight: "700", textTransform: "uppercase", fontSize: "11px", color: mainColor, margin: "0 0 4px 0" }}>Nos Services</p>
+                        <p style={{ fontSize: "11px", color: "#4b5563", whiteSpace: "pre-line", lineHeight: "1.5", margin: 0 }}>{companyData?.services}</p>
                       </div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <p style={{ fontSize: "11px", fontWeight: "600", color: "#111827", margin: 0 }}>NIF : {companyData?.nif || "---"} | RCCM : {companyData?.rccm || "---"}</p>
-                      {companyData?.services && <p style={{ fontSize: "10px", color: "#6b7280", fontStyle: "italic", marginTop: "3px", maxWidth: "200px" }}>{companyData.services}</p>}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="header-grid-option1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", borderBottom: "1px solid #1f2937", paddingBottom: "8px", marginBottom: "0", position: "relative", zIndex: 10, alignItems: "center" }}>
-                    <div className="logo-container-option1" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "210px", width: "100%", overflow: "hidden", flexShrink: 0 }}>
-                      {companyData?.logoUrl ? (
-                        <img src={companyData.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option1" style={{ height: "210px", width: "auto", maxWidth: "420px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                      ) : (
-                        <span style={{ fontSize: "22px", fontWeight: "900", color: "#1f2937", letterSpacing: "0.05em" }}>{companyData?.companyName || "LOGO"}</span>
-                      )}
-                    </div>
-                    <div style={{ borderLeft: `4px solid ${mainColor}`, paddingLeft: "12px", display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "center" }}>
-                      <p style={{ fontWeight: "700", textTransform: "uppercase", fontSize: "11px", color: mainColor, margin: "0 0 4px 0" }}>Nos Services</p>
-                      <p style={{ fontSize: "11px", color: "#4b5563", whiteSpace: "pre-line", lineHeight: "1.5", margin: 0 }}>{companyData?.services}</p>
-                    </div>
-                  </div>
-                )}
+                  )
+                }
 
                 {/* N° FACTURE + DATE */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-1.5 relative z-10 gap-2">
@@ -702,27 +813,10 @@ export default function NewInvoicePage() {
                   </div>
                 </div>
 
-                {/* 🆕 TITRE OPTIONNEL — aligné à gauche */}
+                {/* TITRE OPTIONNEL */}
                 {invoiceTitle.trim() && (
-                  <div
-                    className="invoice-title-row relative z-10 mt-2"
-                    style={{
-                      textAlign: "left",
-                      padding: "4px 8px",
-                      background: `${mainColor}12`,
-                      borderLeft: `3px solid ${mainColor}`,
-                      borderRadius: "2px",
-                    }}
-                  >
-                    <span style={{
-                      fontWeight: "700",
-                      fontSize: "11px",
-                      color: mainColor,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                    }}>
-                      {invoiceTitle.trim()}
-                    </span>
+                  <div className="invoice-title-row relative z-10 mt-2" style={{ textAlign: "left", padding: "4px 8px", background: `${mainColor}12`, borderLeft: `3px solid ${mainColor}`, borderRadius: "2px" }}>
+                    <span style={{ fontWeight: "700", fontSize: "11px", color: mainColor, textTransform: "uppercase", letterSpacing: "0.04em" }}>{invoiceTitle.trim()}</span>
                   </div>
                 )}
 
@@ -821,7 +915,7 @@ export default function NewInvoicePage() {
             </div>
           </div>
 
-          {/* BARRE D'ACTIONS FLOTTANTE */}
+          {/* BARRE D'ACTIONS */}
           <div className="print-hidden fixed bottom-0 inset-x-0 z-[60] flex justify-center px-3 pb-4 sm:pb-6 pointer-events-none">
             <div className="pointer-events-auto w-full max-w-lg sm:max-w-2xl bg-white/95 backdrop-blur-md border border-gray-200 shadow-2xl rounded-2xl px-3 py-2.5 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
               <button type="button" onClick={() => setShowPreview(false)} className="flex-1 px-2 sm:px-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-xs sm:text-sm transition-colors cursor-pointer whitespace-nowrap">✏️<span className="hidden sm:inline ml-1">Modifier</span></button>

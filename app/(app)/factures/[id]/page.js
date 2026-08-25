@@ -265,6 +265,97 @@ function SignatureBlock({ stampSignatureUrl, paymentInfo }) {
   );
 }
 
+// ============================================================
+// COMPOSANT EN-TÊTE OPTION 2 — partagé
+// ============================================================
+function HeaderOption2({ companyData, brandColor }) {
+  return (
+    <div
+      className="header-option2"
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        borderBottom: `2px solid ${brandColor}`,
+        paddingBottom: "8px",
+        marginBottom: "6px",
+        position: "relative",
+        zIndex: 10,
+        gap: "12px",
+        flexWrap: "nowrap",
+        width: "100%",
+      }}
+    >
+      {/* GAUCHE : logo + nom + coordonnées */}
+      <div
+        className="header-option2-left"
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "10px",
+          flex: "0 0 auto",
+          minWidth: 0,
+        }}
+      >
+        {companyData?.logoUrl && (
+          <img
+            src={companyData.logoUrl}
+            alt="Logo"
+            crossOrigin="anonymous"
+            className="logo-img-option2"
+            style={{ height: "80px", width: "auto", maxWidth: "150px", objectFit: "contain", display: "block", flexShrink: 0 }}
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
+          />
+        )}
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <p style={{ fontSize: "13px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: "0 0 2px 0", lineHeight: 1.2 }}>
+            {companyData?.companyName || "SOCIÉTÉ"}
+          </p>
+          {companyData?.address && (
+            <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 1px 0", lineHeight: 1.3 }}>
+              {companyData.address}
+            </p>
+          )}
+          <p style={{ fontSize: "10px", color: "#4b5563", margin: 0, lineHeight: 1.3 }}>
+            {companyData?.phone}{companyData?.email ? ` | ${companyData.email}` : ""}
+          </p>
+        </div>
+      </div>
+
+      {/* DROITE : NIF/RCCM + services — ALIGNÉS À GAUCHE */}
+      <div
+        className="header-option2-right"
+        style={{
+          flex: "1 1 auto",
+          textAlign: "left",
+          paddingLeft: "12px",
+          minWidth: 0,
+          maxWidth: "240px",
+          marginLeft: "auto",
+        }}
+      >
+        <p style={{ fontSize: "10px", fontWeight: "700", color: "#111827", margin: "0 0 3px 0" }}>
+          NIF : {companyData?.nif || "---"} | RCCM : {companyData?.rccm || "---"}
+        </p>
+        {companyData?.services && (
+          <p style={{
+            fontSize: "9px",
+            color: "#4b5563",
+            fontStyle: "italic",
+            margin: 0,
+            lineHeight: "1.5",
+            whiteSpace: "pre-line", /* ✅ respecte les sauts de ligne du user */
+          }}>
+            {companyData.services}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function InvoiceDetailOrEditPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -363,18 +454,14 @@ export default function InvoiceDetailOrEditPage() {
       const normalizedStatus = normalizeStatus(invoiceStatus);
       const paidOrPartial = isPaidOrPartial(normalizedStatus);
       const updatedData = {
-        type: invoiceType,
-        number: invoiceNumber,
-        title: invoiceTitle.trim(),
+        type: invoiceType, number: invoiceNumber, title: invoiceTitle.trim(),
         status: normalizedStatus,
-        paymentDate: paidOrPartial ? paymentDate : "",
-        paymentMethod: paidOrPartial ? paymentMethod : "",
+        paymentDate: paidOrPartial ? paymentDate : "", paymentMethod: paidOrPartial ? paymentMethod : "",
         clientId: selectedClientId,
         clientName: selectedCustomer?.name || selectedCustomer?.businessName || invoice.clientName,
         clientNif: selectedCustomer?.taxId || selectedCustomer?.nif || "",
         taxId: selectedCustomer?.taxId || "",
-        clientAddress: selectedCustomer?.address || "",
-        clientPhone: selectedCustomer?.phone || "",
+        clientAddress: selectedCustomer?.address || "", clientPhone: selectedCustomer?.phone || "",
         clientEmail: selectedCustomer?.email || "",
         date: invoiceDate, items, mainOeuvre: Number(mainOeuvre), remise: montantRemise,
         totalAchat, totalHorsTaxe, tvaAmount, tvaRate: Number(tvaRate), totalTtc,
@@ -398,8 +485,7 @@ export default function InvoiceDetailOrEditPage() {
     } catch (error) {
       console.error(error);
       showToast("La suppression a échoué. Réessayez.", "error");
-      setIsDeleting(false);
-      setConfirmingDelete(false);
+      setIsDeleting(false); setConfirmingDelete(false);
     }
   };
 
@@ -432,8 +518,7 @@ export default function InvoiceDetailOrEditPage() {
     } catch (error) {
       console.error("Erreur PDF:", error);
       showToast("Erreur PDF. Impression standard utilisée.", "error");
-      setIsGeneratingPdf(false);
-      window.print();
+      setIsGeneratingPdf(false); window.print();
     } finally { setTimeout(() => { document.title = originalTitle; }, 1000); }
   };
 
@@ -442,11 +527,7 @@ export default function InvoiceDetailOrEditPage() {
     setShowShare(true);
   };
 
-  if (isLoading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin h-12 w-12 border-t-2 border-blue-600 rounded-full"></div>
-    </div>
-  );
+  if (isLoading) return (<div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-12 w-12 border-t-2 border-blue-600 rounded-full"></div></div>);
   if (!invoice) return null;
 
   const brandColor = company.primaryColor || "#2563eb";
@@ -464,11 +545,7 @@ export default function InvoiceDetailOrEditPage() {
     `d'un montant de ${montantArrete.toLocaleString("fr-FR")} F CFA, datée du ${invoice.date ? new Date(invoice.date).toLocaleDateString("fr-FR") : ""}.\n\n` +
     `Cordialement,\n${company.companyName || ""}${company.phone ? `\n${company.phone}` : ""}`;
 
-  const watermarkStyle = {
-    position: "absolute", inset: 0, display: "flex",
-    alignItems: "center", justifyContent: "center",
-    pointerEvents: "none", opacity: 0.08, userSelect: "none", zIndex: 0,
-  };
+  const watermarkStyle = { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", opacity: 0.08, userSelect: "none", zIndex: 0 };
   const watermarkImgStyle = { width: "60%", maxWidth: "320px", objectFit: "contain", filter: "grayscale(100%)" };
 
   const paymentInfoNode = invoicePaidOrPartial && normalizeStatus(invoice.status) === STATUS.PAID ? (
@@ -500,14 +577,55 @@ export default function InvoiceDetailOrEditPage() {
             border-radius: 0 !important; border: none !important; box-shadow: none !important;
           }
           .invoice-content { position: relative !important; }
+
+          /* ✅ OPTION 2 — forcé row nowrap, services alignés à gauche */
+          .header-option2 {
+            display: flex !important;
+            flex-direction: row !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
+            border-bottom: 2px solid ${brandColor} !important;
+            padding-bottom: 4px !important;
+            margin-bottom: 4px !important;
+            position: relative !important;
+            z-index: 10 !important;
+            gap: 12px !important;
+            flex-wrap: nowrap !important;
+            width: 100% !important;
+          }
+          .header-option2-left {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 8px !important;
+            flex: 0 0 auto !important;
+            min-width: 0 !important;
+          }
+          .header-option2-right {
+            text-align: left !important;      /* ✅ aligné à gauche */
+            flex: 1 1 auto !important;
+            padding-left: 12px !important;
+            min-width: 0 !important;
+            max-width: 240px !important;
+            margin-left: auto !important;
+          }
+          .logo-img-option2 {
+            height: 75px !important;
+            width: auto !important;
+            max-width: 150px !important;
+            object-fit: contain !important;
+            display: block !important;
+            flex-shrink: 0 !important;
+          }
+
+          /* OPTION 1 */
           .header-grid-option1 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 14px !important; border-bottom: 1px solid #1f2937 !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; align-items: center !important; }
-          .header-option2 { display: flex !important; flex-direction: row !important; justify-content: space-between !important; align-items: center !important; border-bottom: 2px solid ${brandColor} !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; gap: 12px !important; flex-wrap: wrap !important; }
+          .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
+          .logo-img-option1 { height: 210px !important; width: auto !important; max-width: 420px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
+
           .invoice-signature-wrapper { min-height: 94mm !important; display: flex !important; flex-direction: column !important; justify-content: flex-end !important; }
           .invoice-signature { margin-bottom: 3mm !important; }
           .invoice-footer { margin-top: 0 !important; padding-bottom: 1mm !important; }
-          .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
-          .logo-img-option1 { height: 210px !important; width: auto !important; max-width: 420px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
-          .logo-img-option2 { height: 110px !important; width: auto !important; max-width: 220px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
           .stamp-signature-img { max-width: 160px !important; max-height: 80px !important; object-fit: contain !important; display: block !important; }
           .invoice-title-row { display: block !important; }
         }
@@ -515,7 +633,6 @@ export default function InvoiceDetailOrEditPage() {
 
       <Toast toast={toast} onClose={() => setToast(null)} />
 
-      {/* HEADER */}
       <header className="print-hidden min-h-[5rem] bg-white border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between p-4 md:px-8 sticky top-0 z-10 shadow-sm gap-4">
         <div className="flex flex-wrap items-center gap-2 md:gap-4">
           <Link href="/factures" className="px-3 py-2 md:py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">&larr; <span className="hidden sm:inline">Retour</span></Link>
@@ -530,9 +647,7 @@ export default function InvoiceDetailOrEditPage() {
                 {isGeneratingPdf && <span className="inline-block h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
                 {isGeneratingPdf ? "Génération..." : "PDF / Imprimer"}
               </button>
-              <button onClick={handleOpenShare} className="flex-1 md:flex-none px-3 md:px-4 py-2 rounded-xl text-sm font-medium bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 flex items-center justify-center gap-1.5">
-                📤 <span>Partager</span>
-              </button>
+              <button onClick={handleOpenShare} className="flex-1 md:flex-none px-3 md:px-4 py-2 rounded-xl text-sm font-medium bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 flex items-center justify-center gap-1.5">📤 <span>Partager</span></button>
               {!confirmingDelete ? (
                 <button onClick={() => setConfirmingDelete(true)} className="flex-1 md:flex-none px-3 py-2 text-sm font-medium rounded-xl text-red-600 hover:bg-red-50">Supprimer</button>
               ) : (
@@ -570,36 +685,24 @@ export default function InvoiceDetailOrEditPage() {
               )}
 
               {/* EN-TÊTE */}
-              {activePrintOption === "2" ? (
-                <div className="header-option2" style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${brandColor}`, paddingBottom: "8px", marginBottom: "8px", position: "relative", zIndex: 10, gap: "12px", flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    {company.logoUrl && (<img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option2" style={{ height: "110px", width: "auto", maxWidth: "220px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />)}
-                    <div>
-                      <p style={{ fontSize: "14px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: 0 }}>{company.companyName || "SOCIÉTÉ"}</p>
-                      <p style={{ fontSize: "11px", color: "#4b5563", margin: "2px 0 0 0" }}>{company.address}</p>
-                      <p style={{ fontSize: "11px", color: "#4b5563", margin: "1px 0 0 0" }}>{company.phone}{company.email ? ` | ${company.email}` : ""}</p>
+              {activePrintOption === "2"
+                ? <HeaderOption2 companyData={company} brandColor={brandColor} />
+                : (
+                  <div className="header-grid-option1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", borderBottom: "1px solid #1f2937", paddingBottom: "8px", marginBottom: "0", position: "relative", zIndex: 10, alignItems: "center" }}>
+                    <div className="logo-container-option1" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "210px", width: "100%", overflow: "hidden", flexShrink: 0 }}>
+                      {company.logoUrl ? (
+                        <img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option1" style={{ height: "210px", width: "auto", maxWidth: "420px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                      ) : (
+                        <span style={{ fontSize: "22px", fontWeight: "900", color: "#1f2937", letterSpacing: "0.05em" }}>{company.companyName || "LOGO"}</span>
+                      )}
+                    </div>
+                    <div style={{ borderLeft: `4px solid ${brandColor}`, paddingLeft: "12px", display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "center" }}>
+                      <p style={{ fontWeight: "700", textTransform: "uppercase", fontSize: "11px", color: brandColor, margin: "0 0 4px 0" }}>Nos Services</p>
+                      <p style={{ fontSize: "11px", color: "#4b5563", whiteSpace: "pre-line", lineHeight: "1.5", margin: 0 }}>{company.services}</p>
                     </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <p style={{ fontSize: "11px", fontWeight: "600", color: "#111827", margin: 0 }}>NIF : {company.nif || "---"} | RCCM : {company.rccm || "---"}</p>
-                    {company.services && <p style={{ fontSize: "10px", color: "#6b7280", fontStyle: "italic", marginTop: "3px", maxWidth: "200px" }}>{company.services}</p>}
-                  </div>
-                </div>
-              ) : (
-                <div className="header-grid-option1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", borderBottom: "1px solid #1f2937", paddingBottom: "8px", marginBottom: "0", position: "relative", zIndex: 10, alignItems: "center" }}>
-                  <div className="logo-container-option1" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "210px", width: "100%", overflow: "hidden", flexShrink: 0 }}>
-                    {company.logoUrl ? (
-                      <img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option1" style={{ height: "210px", width: "auto", maxWidth: "420px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                    ) : (
-                      <span style={{ fontSize: "22px", fontWeight: "900", color: "#1f2937", letterSpacing: "0.05em" }}>{company.companyName || "LOGO"}</span>
-                    )}
-                  </div>
-                  <div style={{ borderLeft: `4px solid ${brandColor}`, paddingLeft: "12px", display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "center" }}>
-                    <p style={{ fontWeight: "700", textTransform: "uppercase", fontSize: "11px", color: brandColor, margin: "0 0 4px 0" }}>Nos Services</p>
-                    <p style={{ fontSize: "11px", color: "#4b5563", whiteSpace: "pre-line", lineHeight: "1.5", margin: 0 }}>{company.services}</p>
-                  </div>
-                </div>
-              )}
+                )
+              }
 
               {/* N° FACTURE + DATE */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-1.5 print:mt-1 relative z-10 gap-2">
@@ -621,25 +724,10 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               </div>
 
-              {/* 🆕 TITRE OPTIONNEL — aligné à gauche */}
+              {/* TITRE OPTIONNEL */}
               {invoice.title && invoice.title.trim() && (
-                <div
-                  className="invoice-title-row relative z-10 mt-2"
-                  style={{
-                    textAlign: "left",
-                    padding: "4px 8px",
-                    background: `${brandColor}12`,
-                    borderLeft: `3px solid ${brandColor}`,
-                    borderRadius: "2px",
-                  }}
-                >
-                  <span style={{
-                    fontWeight: "700",
-                    fontSize: "11px",
-                    color: brandColor,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                  }}>
+                <div className="invoice-title-row relative z-10 mt-2" style={{ textAlign: "left", padding: "4px 8px", background: `${brandColor}12`, borderLeft: `3px solid ${brandColor}`, borderRadius: "2px" }}>
+                  <span style={{ fontWeight: "700", fontSize: "11px", color: brandColor, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                     {invoice.title.trim()}
                   </span>
                 </div>
@@ -770,29 +858,20 @@ export default function InvoiceDetailOrEditPage() {
               </div>
             </div>
 
-            {/* CHAMP TITRE dans l'édition */}
-            <div>
-              <label className="block text-sm font-semibold mb-1">
-                Titre / Objet du document{" "}
-                <span className="text-gray-400 font-normal text-xs">(optionnel)</span>
-              </label>
-              <input
-                type="text"
-                value={invoiceTitle}
-                onChange={(e) => setInvoiceTitle(e.target.value)}
-                placeholder="Ex : Travaux de rénovation bureau, Fournitures informatiques..."
-                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
-                maxLength={120}
-              />
-              <p className="text-xs text-gray-400 mt-1">Ce titre apparaîtra juste avant le tableau sur la facture imprimée.</p>
-            </div>
-
+            {/* TITRE + EN-TÊTE */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold mb-1">Option d'impression / En-tête</label>
+                <label className="block text-sm font-semibold mb-1">
+                  Titre / Objet <span className="text-gray-400 font-normal text-xs">(optionnel)</span>
+                </label>
+                <input type="text" value={invoiceTitle} onChange={(e) => setInvoiceTitle(e.target.value)} placeholder="Ex : Travaux de rénovation bureau..." className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none" maxLength={120} />
+                <p className="text-xs text-gray-400 mt-1">Apparaîtra juste avant le tableau sur la facture.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Mise en page de l'en-tête</label>
                 <select value={printOption} onChange={(e) => setPrintOption(e.target.value)} className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none">
-                  <option value="1">Option 1 (Classique - Logo & Services)</option>
-                  <option value="2">Option 2 (Alternative - Bloc Entreprise Complet)</option>
+                  <option value="1">Option 1 — Classique (Logo grand + Services)</option>
+                  <option value="2">Option 2 — Compact (Logo + Coordonnées + NIF/Services)</option>
                 </select>
               </div>
             </div>
@@ -880,15 +959,11 @@ export default function InvoiceDetailOrEditPage() {
       </main>
 
       <ShareModal
-        open={showShare}
-        onClose={() => setShowShare(false)}
+        open={showShare} onClose={() => setShowShare(false)}
         defaultPhone={invoice.clientPhone || currentCustomer?.phone || ""}
         defaultEmail={invoice.clientEmail || currentCustomer?.email || ""}
-        defaultMessage={shareMessage}
-        subject={shareSubject}
-        filename={pdfFilename}
-        getPdfBlob={getPdfBlob}
-        showToast={showToast}
+        defaultMessage={shareMessage} subject={shareSubject}
+        filename={pdfFilename} getPdfBlob={getPdfBlob} showToast={showToast}
       />
     </div>
   );
