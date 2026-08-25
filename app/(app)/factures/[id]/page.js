@@ -65,12 +65,8 @@ function numberToWords(num) {
   return `${capitalizedWords} (${formattedNumber}) Francs CFA`;
 }
 
-const STATUS = {
-  PENDING: "EN_ATTENTE",
-  PAID: "PAYEE",
-  PARTIAL: "PARTIELLE",
-  CANCELLED: "ANNULEE",
-};
+const STATUS = { PENDING: "EN_ATTENTE", PAID: "PAYEE", PARTIAL: "PARTIELLE", CANCELLED: "ANNULEE" };
+
 function normalizeStatus(status) {
   const s = (status || "").toUpperCase();
   return s === "PAYÉ" ? STATUS.PAID : s === "ANNULÉ" ? STATUS.CANCELLED : s;
@@ -91,7 +87,6 @@ function generateItemId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
-
 function normalizePhone(raw, defaultCode = "228") {
   if (!raw) return "";
   const first = String(raw).split(/[\/,;]/)[0];
@@ -213,16 +208,19 @@ function ShareModal({ open, onClose, defaultPhone, defaultEmail, defaultMessage,
           <button type="button" onClick={() => setTab("email")} className={`flex-1 px-3 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${tab === "email" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>Email</button>
         </div>
         {tab === "whatsapp" ? (
-          <div><label className="block text-xs font-bold text-gray-600 uppercase mb-1">Numéro du destinataire</label>
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Numéro du destinataire</label>
             <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+228 90 00 00 00" className="w-full p-3 border rounded-xl bg-gray-50 text-sm focus:bg-white" />
             {waNumber && <p className="text-[11px] text-gray-400 mt-1">Sera envoyé au : +{waNumber}</p>}
           </div>
         ) : (
           <div className="space-y-3">
-            <div><label className="block text-xs font-bold text-gray-600 uppercase mb-1">Email du destinataire</label>
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Email du destinataire</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="client@exemple.com" className="w-full p-3 border rounded-xl bg-gray-50 text-sm focus:bg-white" />
             </div>
-            <div><label className="block text-xs font-bold text-gray-600 uppercase mb-1">Objet</label>
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Objet</label>
               <input type="text" value={subject} readOnly className="w-full p-3 border rounded-xl bg-gray-100 text-sm text-gray-500" />
             </div>
           </div>
@@ -232,7 +230,7 @@ function ShareModal({ open, onClose, defaultPhone, defaultEmail, defaultMessage,
           <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5} className="w-full p-3 border rounded-xl bg-gray-50 text-sm focus:bg-white resize-none" />
         </div>
         <div className="mt-4 bg-blue-50 border border-blue-100 text-blue-800 text-[11px] leading-snug rounded-xl p-3">
-          📎 Sur mobile, le PDF sera <b>directement joint</b> via le menu de partage. Sur ordinateur, il sera <b>téléchargé automatiquement</b>.
+          📎 Sur mobile, le PDF sera <b>directement joint</b>. Sur ordinateur, il sera <b>téléchargé automatiquement</b>.
         </div>
         <button type="button" disabled={busy} onClick={() => handleSend(tab)} className={`w-full mt-4 px-5 py-3 text-white font-semibold rounded-xl text-sm shadow-md transition-colors disabled:opacity-60 flex items-center justify-center gap-2 ${tab === "whatsapp" ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700"}`}>
           {busy && <span className="inline-block h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
@@ -247,41 +245,18 @@ function ShareModal({ open, onClose, defaultPhone, defaultEmail, defaultMessage,
   );
 }
 
-// ============================================================
-// COMPOSANT SIGNATURE — réutilisable dans les deux sections
-// ============================================================
 function SignatureBlock({ stampSignatureUrl, paymentInfo }) {
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 print:gap-4">
-      {/* Bloc paiement à gauche */}
-      <div className="text-[9px] print:text-[8px] text-gray-500">
-        {paymentInfo}
-      </div>
-
-      {/* Bloc responsable à droite */}
+      <div className="text-[9px] print:text-[8px] text-gray-500">{paymentInfo}</div>
       <div className="text-center">
         <p className="font-bold text-[11px] print:text-[10px] underline mb-2">LE RESPONSABLE</p>
         {stampSignatureUrl ? (
-          // 🆕 Image cachet+signature importée
           <div style={{ width: "160px", height: "80px" }} className="flex items-center justify-center">
-            <img
-              src={stampSignatureUrl}
-              alt="Cachet & Signature"
-              crossOrigin="anonymous"
-              style={{
-                maxWidth: "160px",
-                maxHeight: "80px",
-                objectFit: "contain",
-                display: "block",
-              }}
-            />
+            <img src={stampSignatureUrl} alt="Cachet & Signature" crossOrigin="anonymous" className="stamp-signature-img" style={{ maxWidth: "160px", maxHeight: "80px", objectFit: "contain", display: "block" }} />
           </div>
         ) : (
-          // Placeholder si pas d'image
-          <div
-            className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[9px] print:text-[8px] text-gray-400 italic"
-            style={{ width: "160px", height: "70px" }}
-          >
+          <div className="border border-dashed border-gray-300 bg-white rounded flex items-center justify-center text-[9px] print:text-[8px] text-gray-400 italic" style={{ width: "160px", height: "70px" }}>
             Cachet &amp; Signature
           </div>
         )}
@@ -311,6 +286,7 @@ export default function InvoiceDetailOrEditPage() {
   const [paymentDate, setPaymentDate] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Espèces");
   const [selectedClientId, setSelectedClientId] = useState("");
+  const [invoiceTitle, setInvoiceTitle] = useState("");
   const [items, setItems] = useState([]);
   const [mainOeuvre, setMainOeuvre] = useState(0);
   const [remise, setRemise] = useState(0);
@@ -345,6 +321,7 @@ export default function InvoiceDetailOrEditPage() {
           setPaymentDate(data.paymentDate || new Date().toISOString().split("T")[0]);
           setPaymentMethod(data.paymentMethod || "Espèces");
           setSelectedClientId(data.clientId || "");
+          setInvoiceTitle(data.title || "");
           setItems((data.items || []).map((item) => ({ ...item, id: item.id ?? generateItemId() })));
           setMainOeuvre(data.mainOeuvre || 0);
           setRemise(data.remise || 0);
@@ -386,13 +363,18 @@ export default function InvoiceDetailOrEditPage() {
       const normalizedStatus = normalizeStatus(invoiceStatus);
       const paidOrPartial = isPaidOrPartial(normalizedStatus);
       const updatedData = {
-        type: invoiceType, number: invoiceNumber, status: normalizedStatus,
-        paymentDate: paidOrPartial ? paymentDate : "", paymentMethod: paidOrPartial ? paymentMethod : "",
+        type: invoiceType,
+        number: invoiceNumber,
+        title: invoiceTitle.trim(),
+        status: normalizedStatus,
+        paymentDate: paidOrPartial ? paymentDate : "",
+        paymentMethod: paidOrPartial ? paymentMethod : "",
         clientId: selectedClientId,
         clientName: selectedCustomer?.name || selectedCustomer?.businessName || invoice.clientName,
         clientNif: selectedCustomer?.taxId || selectedCustomer?.nif || "",
         taxId: selectedCustomer?.taxId || "",
-        clientAddress: selectedCustomer?.address || "", clientPhone: selectedCustomer?.phone || "",
+        clientAddress: selectedCustomer?.address || "",
+        clientPhone: selectedCustomer?.phone || "",
         clientEmail: selectedCustomer?.email || "",
         date: invoiceDate, items, mainOeuvre: Number(mainOeuvre), remise: montantRemise,
         totalAchat, totalHorsTaxe, tvaAmount, tvaRate: Number(tvaRate), totalTtc,
@@ -468,7 +450,6 @@ export default function InvoiceDetailOrEditPage() {
   if (!invoice) return null;
 
   const brandColor = company.primaryColor || "#2563eb";
-  // 🆕 Récupération de l'image cachet+signature
   const stampSignatureUrl = company.stampSignatureUrl || "";
   const montantArrete = applyRsps ? netAPayer : totalTtc;
   const currentStatusBadge = getStatusBadge(invoice.status);
@@ -490,7 +471,6 @@ export default function InvoiceDetailOrEditPage() {
   };
   const watermarkImgStyle = { width: "60%", maxWidth: "320px", objectFit: "contain", filter: "grayscale(100%)" };
 
-  // Infos paiement pour le bloc signature
   const paymentInfoNode = invoicePaidOrPartial && normalizeStatus(invoice.status) === STATUS.PAID ? (
     <p className="border border-green-500 text-green-700 px-2 py-1 rounded inline-block font-bold text-[9px] print:text-[8px]">
       ✓ Réglé par {invoice.paymentMethod || "Espèces"} le{" "}
@@ -528,14 +508,14 @@ export default function InvoiceDetailOrEditPage() {
           .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
           .logo-img-option1 { height: 210px !important; width: auto !important; max-width: 420px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
           .logo-img-option2 { height: 110px !important; width: auto !important; max-width: 220px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
-          
-          /* 🆕 Impression cachet+signature */
           .stamp-signature-img { max-width: 160px !important; max-height: 80px !important; object-fit: contain !important; display: block !important; }
+          .invoice-title-row { display: block !important; }
         }
       `}</style>
 
       <Toast toast={toast} onClose={() => setToast(null)} />
 
+      {/* HEADER */}
       <header className="print-hidden min-h-[5rem] bg-white border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between p-4 md:px-8 sticky top-0 z-10 shadow-sm gap-4">
         <div className="flex flex-wrap items-center gap-2 md:gap-4">
           <Link href="/factures" className="px-3 py-2 md:py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">&larr; <span className="hidden sm:inline">Retour</span></Link>
@@ -579,10 +559,7 @@ export default function InvoiceDetailOrEditPage() {
         </div>
       )}
 
-      <main
-        id="invoice-printable-container"
-        className="max-w-3xl mx-4 md:mx-auto mt-6 bg-white rounded-2xl shadow-sm border border-gray-200 px-4 pt-2 pb-4 md:px-6 md:pt-2 md:pb-6 print:m-0 print:rounded-none print:border-none print:shadow-none"
-      >
+      <main id="invoice-printable-container" className="max-w-3xl mx-4 md:mx-auto mt-6 bg-white rounded-2xl shadow-sm border border-gray-200 px-4 pt-2 pb-4 md:px-6 md:pt-2 md:pb-6 print:m-0 print:rounded-none print:border-none print:shadow-none">
         {!isEditing ? (
           <>
             <div className="invoice-content relative bg-white">
@@ -592,12 +569,11 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               )}
 
+              {/* EN-TÊTE */}
               {activePrintOption === "2" ? (
                 <div className="header-option2" style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${brandColor}`, paddingBottom: "8px", marginBottom: "8px", position: "relative", zIndex: 10, gap: "12px", flexWrap: "wrap" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    {company.logoUrl && (
-                      <img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option2" style={{ height: "110px", width: "auto", maxWidth: "220px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                    )}
+                    {company.logoUrl && (<img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option2" style={{ height: "110px", width: "auto", maxWidth: "220px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />)}
                     <div>
                       <p style={{ fontSize: "14px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: 0 }}>{company.companyName || "SOCIÉTÉ"}</p>
                       <p style={{ fontSize: "11px", color: "#4b5563", margin: "2px 0 0 0" }}>{company.address}</p>
@@ -625,6 +601,7 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               )}
 
+              {/* N° FACTURE + DATE */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-1.5 print:mt-1 relative z-10 gap-2">
                 <div className="text-white px-3 py-1.5 print:py-1 rounded font-bold text-xs shadow-sm w-full sm:w-auto text-center sm:text-left" style={{ backgroundColor: brandColor }}>
                   {isProforma ? "PROFORMA" : "FACTURE"} N° {invoice.number} / {company.companyName || "Société"} / {new Date(invoice.date).getFullYear() || new Date().getFullYear()}
@@ -634,6 +611,7 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               </div>
 
+              {/* BLOC CLIENT */}
               <div className="flex justify-end relative z-10 mt-1.5 print:mt-1">
                 <div className="w-[300px] max-w-full border border-gray-300 bg-gray-100 p-2 text-[11px] print:text-[10px] space-y-0.5 rounded-lg shadow-sm">
                   <p className="font-bold text-gray-900">DOIT : {invoice.clientName}</p>
@@ -643,6 +621,31 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               </div>
 
+              {/* 🆕 TITRE OPTIONNEL — aligné à gauche */}
+              {invoice.title && invoice.title.trim() && (
+                <div
+                  className="invoice-title-row relative z-10 mt-2"
+                  style={{
+                    textAlign: "left",
+                    padding: "4px 8px",
+                    background: `${brandColor}12`,
+                    borderLeft: `3px solid ${brandColor}`,
+                    borderRadius: "2px",
+                  }}
+                >
+                  <span style={{
+                    fontWeight: "700",
+                    fontSize: "11px",
+                    color: brandColor,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                  }}>
+                    {invoice.title.trim()}
+                  </span>
+                </div>
+              )}
+
+              {/* TABLEAU */}
               <div className="relative z-10 mt-2 print:mt-1.5 overflow-x-auto print:overflow-visible">
                 <table className="w-full text-left text-[10px] print:text-[9px] border-collapse border border-gray-400 bg-white">
                   <thead>
@@ -714,16 +717,10 @@ export default function InvoiceDetailOrEditPage() {
               </div>
             </div>
 
-            {/* WRAPPER SIGNATURE + FOOTER */}
             <div className="invoice-signature-wrapper">
               <div className="invoice-signature mt-4 print:mt-0">
-                {/* 🆕 Utilisation du composant SignatureBlock */}
-                <SignatureBlock
-                  stampSignatureUrl={stampSignatureUrl}
-                  paymentInfo={paymentInfoNode}
-                />
+                <SignatureBlock stampSignatureUrl={stampSignatureUrl} paymentInfo={paymentInfoNode} />
               </div>
-
               <div className="invoice-footer mt-4 print:mt-0">
                 <div className="w-full border-t-2 pt-1.5 print:pt-1 text-[9px] print:text-[8px] text-center text-gray-600 bg-white" style={{ borderColor: brandColor }}>
                   <p className="font-bold text-gray-900 text-[10px] print:text-[9px] mb-0.5">{company.companyName}</p>
@@ -739,8 +736,10 @@ export default function InvoiceDetailOrEditPage() {
             </div>
           </>
         ) : (
+          /* FORMULAIRE D'ÉDITION */
           <form onSubmit={handleUpdate} className="space-y-6 pt-4">
             <h2 className="text-lg md:text-xl font-bold border-b pb-4">Modifier le document</h2>
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-semibold mb-1">Type de Document</label>
@@ -770,6 +769,24 @@ export default function InvoiceDetailOrEditPage() {
                 </select>
               </div>
             </div>
+
+            {/* CHAMP TITRE dans l'édition */}
+            <div>
+              <label className="block text-sm font-semibold mb-1">
+                Titre / Objet du document{" "}
+                <span className="text-gray-400 font-normal text-xs">(optionnel)</span>
+              </label>
+              <input
+                type="text"
+                value={invoiceTitle}
+                onChange={(e) => setInvoiceTitle(e.target.value)}
+                placeholder="Ex : Travaux de rénovation bureau, Fournitures informatiques..."
+                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                maxLength={120}
+              />
+              <p className="text-xs text-gray-400 mt-1">Ce titre apparaîtra juste avant le tableau sur la facture imprimée.</p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold mb-1">Option d'impression / En-tête</label>
@@ -779,6 +796,7 @@ export default function InvoiceDetailOrEditPage() {
                 </select>
               </div>
             </div>
+
             {isPaidOrPartial(invoiceStatus) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-green-50 rounded-xl border border-green-200">
                 <div>
@@ -797,6 +815,7 @@ export default function InvoiceDetailOrEditPage() {
                 </div>
               </div>
             )}
+
             <div>
               <label className="block text-sm font-semibold mb-2">Lignes de prestations</label>
               {items.map((item) => (
@@ -811,6 +830,7 @@ export default function InvoiceDetailOrEditPage() {
               ))}
               <button type="button" onClick={handleAddItem} className="text-blue-600 bg-blue-50 w-full sm:w-auto p-3 rounded-lg text-sm font-bold mt-2">+ Ajouter une ligne</button>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold mb-1">Main d'œuvre (FCFA)</label>
@@ -821,6 +841,7 @@ export default function InvoiceDetailOrEditPage() {
                 <input type="number" min="0" value={remise} onChange={(e) => setRemise(e.target.value)} className="w-full p-3 border rounded-xl bg-gray-50" />
               </div>
             </div>
+
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 bg-gray-50 rounded-xl border">
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-3">
@@ -847,6 +868,7 @@ export default function InvoiceDetailOrEditPage() {
                 )}
               </div>
             </div>
+
             <div className="flex justify-end pt-4 border-t">
               <button type="submit" disabled={isSaving} className="w-full md:w-auto px-6 py-3.5 md:py-2.5 font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-2">
                 {isSaving && <span className="inline-block h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
