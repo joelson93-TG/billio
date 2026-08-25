@@ -1,45 +1,84 @@
 "use client";
 
 import { useState } from "react";
-import { 
-  signInWithEmailAndPassword, 
+import {
+  signInWithEmailAndPassword,
   sendPasswordResetEmail,
   setPersistence,
   browserLocalPersistence,
-  browserSessionPersistence
+  browserSessionPersistence,
+  signOut
 } from "firebase/auth";
-import { auth } from "@/firebase";
-import { useRouter } from "next/navigation";
+import { auth, db } from "@/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true); // 🆕 coché par défaut
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState(""); 
+  const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reason = searchParams.get("reason");
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
     setMessage("");
+
     try {
-      // 🆕 Définition de la persistance AVANT la connexion
-      // Local = session conservée même après fermeture du navigateur
-      // Session = session effacée à la fermeture du navigateur/onglet
+      // Définition de la persistance AVANT la connexion
       await setPersistence(
         auth,
         rememberMe ? browserLocalPersistence : browserSessionPersistence
       );
 
-      await signInWithEmailAndPassword(auth, email, password);
-      router.push("/dashboard");
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // ── Vérification compte désactivé de force ──
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists() && userDoc.data().forceDisabled === true) {
+          // Déconnecter immédiatement l'utilisateur banni
+          await signOut(auth);
+          setError("⛔ Votre compte a été suspendu suite à une infraction aux conditions d'utilisation. Contactez le support : support@billio.app");
+          setIsLoading(false);
+          return;
+        }
+      } catch (firestoreErr) {
+        // Si on ne peut pas lire Firestore (règles bloquantes), on considère le compte suspendu
+        console.warn("Impossible de vérifier le statut du compte :", firestoreErr);
+        await signOut(auth);
+        setError("⛔ Votre compte a été suspendu. Contactez le support : support@billio.app");
+        setIsLoading(false);
+        return;
+      }
+
+      // Redirection admin ou client
+      if (user.email === "admin@jblessconsulting.com") {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
+
     } catch (err) {
-      setError("Identifiants incorrects. Veuillez réessayer.");
+      const code = err?.code || "";
+      if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        setError("Identifiants incorrects. Vérifiez votre email et mot de passe.");
+      } else if (code === "auth/too-many-requests") {
+        setError("Trop de tentatives. Veuillez patienter quelques minutes avant de réessayer.");
+      } else if (code === "auth/user-disabled") {
+        setError("⛔ Ce compte a été désactivé. Contactez le support : support@billio.app");
+      } else {
+        setError("Une erreur est survenue. Veuillez réessayer.");
+      }
       setIsLoading(false);
     }
   };
@@ -51,7 +90,6 @@ export default function LoginPage() {
       setError("Veuillez saisir votre adresse e-mail ci-dessus, puis cliquez à nouveau sur 'Mot de passe oublié ?'");
       return;
     }
-    
     try {
       await sendPasswordResetEmail(auth, email);
       setMessage("Un e-mail de réinitialisation a été envoyé ! Vérifiez votre boîte de réception.");
@@ -62,11 +100,11 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-[100dvh] w-full max-w-[100vw] flex items-center justify-center lg:items-stretch lg:justify-start lg:flex-row bg-gradient-to-br from-blue-600 via-indigo-700 to-indigo-900 font-sans overflow-x-hidden overflow-y-auto p-4 sm:p-8 lg:p-0">
-      
+
       <div className="w-full max-w-md lg:max-w-none lg:w-1/2 flex items-center justify-center bg-white px-6 py-10 sm:p-10 lg:p-20 xl:p-24 relative z-10 rounded-[2rem] lg:rounded-none lg:rounded-r-[3.5rem] shadow-2xl lg:shadow-[25px_0_50px_-12px_rgba(0,0,0,0.3)] transition-all duration-300 lg:min-h-screen">
-        
+
         <div className="w-full max-w-sm lg:max-w-md space-y-8">
-          
+
           <div>
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-blue-500/30">
@@ -82,15 +120,30 @@ export default function LoginPage() {
             </p>
           </div>
 
+          {/* ── Bannière compte suspendu (redirection depuis dashboard) ── */}
+          {reason === "disabled" && !error && (
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+              <svg className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11A6 6 0 0114.89 13.476zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+              </svg>
+              <div>
+                <p className="text-sm font-bold text-red-700">Compte suspendu</p>
+                <p className="text-sm text-red-600 mt-0.5">Votre compte a été suspendu suite à une infraction aux conditions d'utilisation. Contactez le support : <span className="font-semibold">support@billio.app</span></p>
+              </div>
+            </div>
+          )}
+
+          {/* Erreur */}
           {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-              <svg className="h-5 w-5 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+              <svg className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
               <p className="text-sm font-medium text-red-700">{error}</p>
             </div>
           )}
 
+          {/* Succès */}
           {message && (
             <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
               <svg className="h-5 w-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -101,7 +154,7 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleLogin} className="space-y-5 mt-8">
-            
+
             {/* Champ Email */}
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm font-semibold text-gray-700">
@@ -134,8 +187,8 @@ export default function LoginPage() {
                 <label htmlFor="password" className="block text-sm font-semibold text-gray-700">
                   Mot de passe
                 </label>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={handleResetPassword}
                   className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors focus:outline-none"
                 >
@@ -180,7 +233,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* 🆕 Case "Se souvenir de moi" */}
+            {/* Case "Se souvenir de moi" */}
             <div className="flex items-center gap-2.5">
               <input
                 id="rememberMe"
@@ -190,10 +243,7 @@ export default function LoginPage() {
                 disabled={isLoading}
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               />
-              <label
-                htmlFor="rememberMe"
-                className="text-sm text-gray-700 font-medium cursor-pointer select-none"
-              >
+              <label htmlFor="rememberMe" className="text-sm text-gray-700 font-medium cursor-pointer select-none">
                 Se souvenir de moi
               </label>
             </div>
@@ -209,7 +259,7 @@ export default function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span>Connexion...</span>
+                  <span>Vérification en cours...</span>
                 </>
               ) : (
                 "Se connecter"
@@ -223,13 +273,15 @@ export default function LoginPage() {
               Créer une entreprise
             </Link>
           </p>
+
         </div>
       </div>
 
+      {/* Panneau droit décoratif */}
       <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center flex-1">
         <div className="absolute top-10 left-10 w-[400px] h-[400px] bg-blue-400 rounded-full mix-blend-screen filter blur-[100px] opacity-40 animate-pulse"></div>
         <div className="absolute bottom-10 right-10 w-[500px] h-[500px] bg-purple-500 rounded-full mix-blend-screen filter blur-[100px] opacity-40"></div>
-        
+
         <div className="relative z-10 text-center text-white px-12">
           <div className="inline-flex p-4 rounded-3xl bg-white/10 backdrop-blur-md border border-white/20 mb-8 shadow-2xl transform transition-transform hover:scale-105 duration-500">
             <div className="w-72 h-44 bg-white/5 rounded-2xl border border-white/10 p-5 flex flex-col gap-4">
@@ -243,10 +295,10 @@ export default function LoginPage() {
             Un outil pensé pour les PME. Simplifiez vos devis, factures et suivez votre trésorerie en temps réel avec Billio.
           </p>
         </div>
-        
+
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
       </div>
-      
+
     </div>
   );
 }
