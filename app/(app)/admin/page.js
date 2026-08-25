@@ -33,10 +33,16 @@ const IconWhatsApp = ({ className = "w-4 h-4" }) => <svg className={className} f
 const IconMail = ({ className = "w-4 h-4" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>;
 const IconBan = ({ className = "w-4 h-4" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>;
 const IconUnban = ({ className = "w-4 h-4" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-
 const IconRobot = ({ className = "w-5 h-5" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6m-3-1v4m-7 5h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2zm3 5h.01M15 14h.01M8 18h8" />
+  </svg>
+);
+
+// ⭐ NOUVELLE ICÔNE : Groupe WhatsApp / Communauté
+const IconWhatsAppGroup = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
   </svg>
 );
 
@@ -103,16 +109,15 @@ export default function AdminDashboardPage() {
   const [testEmailAddress, setTestEmailAddress] = useState("");
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [emailTestResult, setEmailTestResult] = useState(null);
-  // ── NOUVEAU : désactivation forcée ──
   const [togglingUserStatus, setTogglingUserStatus] = useState(null);
-
   const [stats, setStats] = useState({ totalUsers: 0, activeUsers: 0, trialUsers: 0, expiredUsers: 0, totalRevenue: 0 });
   const [usersList, setUsersList] = useState([]);
   const [pricing, setPricing] = useState({ monthly: 12000, sixMonths: 60000, yearly: 100000 });
   const pricingRef = useRef(pricing);
   useEffect(() => { pricingRef.current = pricing; }, [pricing]);
 
-  const [helpLinks, setHelpLinks] = useState({ whatsapp: "", facebook: "", tiktok: "", website: "" });
+  // ⭐ Ajout de whatsappGroup dans helpLinks
+  const [helpLinks, setHelpLinks] = useState({ whatsapp: "", facebook: "", tiktok: "", website: "", whatsappGroup: "" });
   const [tutorials, setTutorials] = useState([]);
   const [newTutorial, setNewTutorial] = useState({ title: "", embedUrl: "" });
   const [editingTutorial, setEditingTutorial] = useState(null);
@@ -126,18 +131,14 @@ export default function AdminDashboardPage() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
-
   const [conversations, setConversations] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [replyText, setReplyText] = useState("");
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [totalUnreadMessages, setTotalUnreadMessages] = useState(0);
-  // Ref pour le scroll vers le bas des messages
   const messagesEndRef = useRef(null);
-  // Ref pour la zone de messages scrollable
   const messagesContainerRef = useRef(null);
-  // Ref pour l'unsubscribe des messages (évite les plantages)
   const chatUnsubRef = useRef(null);
   const [chatFilter, setChatFilter] = useState("all");
   const [isUpdatingChatAi, setIsUpdatingChatAi] = useState(false);
@@ -223,7 +224,6 @@ export default function AdminDashboardPage() {
             } catch (e) { companyData = {}; }
             const daysLeft = computeDaysLeft(userData);
             let computedStatus = userData.subscriptionStatus || sub.status || "trial";
-            // Si l'utilisateur est désactivé de force, on garde "disabled"
             if (userData.forceDisabled) { computedStatus = "disabled"; }
             else if (computedStatus !== "expired" && daysLeft <= 0) { computedStatus = "expired"; }
             const resolvedPlan = resolvePlan(userData, sub, computedStatus);
@@ -277,49 +277,26 @@ export default function AdminDashboardPage() {
     return () => unsub();
   }, [isAdminVerified]);
 
-  // ── Messages de la conversation sélectionnée (CORRIGÉ) ──
+  // ── Messages de la conversation sélectionnée ──
   useEffect(() => {
-    // Nettoyer l'ancien listener avant d'en créer un nouveau
-    if (chatUnsubRef.current) {
-      chatUnsubRef.current();
-      chatUnsubRef.current = null;
-    }
-
-    if (!selectedChatId) {
-      setChatMessages([]);
-      return;
-    }
-
-    // Réinitialiser les messages pour éviter l'affichage de l'ancienne conversation
+    if (chatUnsubRef.current) { chatUnsubRef.current(); chatUnsubRef.current = null; }
+    if (!selectedChatId) { setChatMessages([]); return; }
     setChatMessages([]);
-
     const q = query(collection(db, "chats", selectedChatId, "messages"), orderBy("timestamp", "asc"));
     const unsub = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setChatMessages(msgs);
     });
-
     chatUnsubRef.current = unsub;
-
-    // Marquer comme lu
     updateDoc(doc(db, "chats", selectedChatId), { unreadByAdmin: 0 }).catch(() => {});
-
-    return () => {
-      if (chatUnsubRef.current) {
-        chatUnsubRef.current();
-        chatUnsubRef.current = null;
-      }
-    };
+    return () => { if (chatUnsubRef.current) { chatUnsubRef.current(); chatUnsubRef.current = null; } };
   }, [selectedChatId]);
 
-  // ── Scroll automatique vers le bas quand les messages changent ──
+  // ── Scroll automatique ──
   useEffect(() => {
     if (chatMessages.length === 0) return;
-    // Utiliser requestAnimationFrame pour s'assurer que le DOM est mis à jour
     const raf = requestAnimationFrame(() => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-      }
+      if (messagesEndRef.current) { messagesEndRef.current.scrollIntoView({ behavior: "smooth" }); }
     });
     return () => cancelAnimationFrame(raf);
   }, [chatMessages]);
@@ -328,7 +305,6 @@ export default function AdminDashboardPage() {
     return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
   }, [previewUrl]);
 
-  // ── NOUVEAU : Désactiver / Réactiver un utilisateur de force ──
   const handleToggleUserDisabled = async (user) => {
     const action = user.forceDisabled ? "réactiver" : "désactiver";
     if (!confirm(`Voulez-vous vraiment ${action} le compte de "${user.companyName}" ?\n\n${user.forceDisabled ? "L'utilisateur pourra à nouveau accéder à son compte." : "L'utilisateur ne pourra plus accéder à son compte jusqu'à réactivation."}`)) return;
@@ -343,9 +319,7 @@ export default function AdminDashboardPage() {
     } catch (error) {
       console.error("Erreur désactivation utilisateur :", error);
       alert(`❌ Erreur : ${error.message}`);
-    } finally {
-      setTogglingUserStatus(null);
-    }
+    } finally { setTogglingUserStatus(null); }
   };
 
   const handleSendReply = async (e) => {
@@ -433,13 +407,17 @@ export default function AdminDashboardPage() {
     return `https://${trimmed}`;
   };
 
+  // ⭐ handleSaveHelpLinks mis à jour pour inclure whatsappGroup
   const handleSaveHelpLinks = async (e) => {
     e.preventDefault();
     setIsSavingHelp(true);
     try {
       await setDoc(doc(db, "settings", "help_center_links"), {
-        whatsapp: helpLinks.whatsapp, facebook: formatUrl(helpLinks.facebook),
-        tiktok: formatUrl(helpLinks.tiktok), website: formatUrl(helpLinks.website),
+        whatsapp: helpLinks.whatsapp,
+        facebook: formatUrl(helpLinks.facebook),
+        tiktok: formatUrl(helpLinks.tiktok),
+        website: formatUrl(helpLinks.website),
+        whatsappGroup: helpLinks.whatsappGroup ? formatUrl(helpLinks.whatsappGroup) : "",
         updatedAt: new Date().toISOString(),
       });
       alert("Liens du centre d'aide mis à jour !");
@@ -650,6 +628,7 @@ export default function AdminDashboardPage() {
     { name: "Annuel", count: usersList.filter(u => u.plan === "1year").length },
     { name: "Essai", count: usersList.filter(u => u.plan === "Essai" || !u.plan).length },
   ];
+
   const getClientInfo = (chatId) => usersList.find(u => u.uid === chatId) || null;
   const selectedConversation = conversations.find(c => c.id === selectedChatId);
   const selectedClientInfo = selectedChatId ? getClientInfo(selectedChatId) : null;
@@ -694,7 +673,6 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-100 flex font-sans selection:bg-blue-500/30">
-
       {/* SIDEBAR DESKTOP */}
       <aside className="w-72 bg-[#0F172A] border-r border-slate-800 flex-col justify-between hidden md:flex shadow-2xl z-20">
         <div>
@@ -906,8 +884,6 @@ export default function AdminDashboardPage() {
                     className="pl-10 pr-4 py-2.5 text-xs bg-slate-900 border border-slate-700 rounded-xl outline-none text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all w-full sm:w-64 shadow-inner" />
                 </div>
               </div>
-
-              {/* Filtre par statut */}
               <div className="flex flex-wrap gap-2 mb-6">
                 {[
                   { key: "all", label: "Tous" },
@@ -923,7 +899,6 @@ export default function AdminDashboardPage() {
                 ))}
               </div>
 
-              {/* MINI-STATS Rappel */}
               {reminderStats && (
                 <div className="mb-8 bg-slate-900/40 border border-slate-800 rounded-2xl p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
@@ -1023,7 +998,6 @@ export default function AdminDashboardPage() {
                         </td>
                         <td className="py-4 px-4 text-right whitespace-nowrap">
                           <div className="flex items-center gap-2 justify-end flex-wrap">
-                            {/* Bouton rappel */}
                             {isReminderTarget(u) && (
                               <button onClick={() => handleSendReminder(u)} disabled={sendingReminderTo === u.uid}
                                 className={`inline-flex items-center gap-2 px-3 py-2 font-bold text-xs rounded-xl transition-all border disabled:opacity-50 ${u.phone ? "bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/20" : "bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border-purple-500/20"}`}
@@ -1032,8 +1006,6 @@ export default function AdminDashboardPage() {
                                 {u.phone ? "Rappel" : "Rappel (Email)"}
                               </button>
                             )}
-
-                            {/* Bouton contact */}
                             {u.phone ? (
                               <a href={`https://wa.me/${u.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer"
                                 className="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] font-bold text-xs rounded-xl transition-all border border-[#25D366]/20 hover:scale-105">
@@ -1046,18 +1018,11 @@ export default function AdminDashboardPage() {
                             ) : (
                               <span className="text-slate-600 text-xs italic">Aucun contact</span>
                             )}
-
-                            {/* ── BOUTON DÉSACTIVATION FORCÉE (NOUVEAU) ── */}
                             <button
                               onClick={() => handleToggleUserDisabled(u)}
                               disabled={togglingUserStatus === u.uid}
-                              className={`inline-flex items-center gap-1.5 px-3 py-2 font-bold text-xs rounded-xl transition-all border disabled:opacity-50 ${
-                                u.forceDisabled
-                                  ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20"
-                                  : "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20"
-                              }`}
-                              title={u.forceDisabled ? "Réactiver ce compte" : "Désactiver ce compte (infraction aux règles)"}
-                            >
+                              className={`inline-flex items-center gap-1.5 px-3 py-2 font-bold text-xs rounded-xl transition-all border disabled:opacity-50 ${u.forceDisabled ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20"}`}
+                              title={u.forceDisabled ? "Réactiver ce compte" : "Désactiver ce compte (infraction aux règles)"}>
                               {togglingUserStatus === u.uid ? (
                                 <div className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin"></div>
                               ) : u.forceDisabled ? (
@@ -1073,9 +1038,7 @@ export default function AdminDashboardPage() {
                     ))}
                     {filteredUsers.length === 0 && (
                       <tr>
-                        <td colSpan="4" className="py-12 text-center text-slate-500 text-sm">
-                          Aucune entreprise trouvée avec cette recherche.
-                        </td>
+                        <td colSpan="4" className="py-12 text-center text-slate-500 text-sm">Aucune entreprise trouvée avec cette recherche.</td>
                       </tr>
                     )}
                   </tbody>
@@ -1129,7 +1092,7 @@ export default function AdminDashboardPage() {
             <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="mb-6">
                 <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2"><IconImage /> Diaporama du Tableau de Bord (Page d'Accueil)</h3>
-                <p className="text-slate-400 text-sm mt-2">Importez directement vos captures d'écran depuis votre ordinateur. L'image est automatiquement hébergée sur Firebase Storage et ajoutée au diaporama de la landing page. Si aucune image n'est ajoutée ici, une image par défaut est utilisée automatiquement.</p>
+                <p className="text-slate-400 text-sm mt-2">Importez directement vos captures d'écran depuis votre ordinateur. L'image est automatiquement hébergée sur Firebase Storage et ajoutée au diaporama de la landing page.</p>
               </div>
               <div className="space-y-4 mb-8 p-4 md:p-6 bg-slate-900/30 rounded-2xl border border-slate-700">
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">Ajouter une image (upload direct)</label>
@@ -1162,7 +1125,7 @@ export default function AdminDashboardPage() {
                     </button>
                   </div>
                 )}
-                <p className="text-[11px] text-slate-500">L'image sera automatiquement placée à la fin du diaporama. Utilisez les flèches ci-dessous pour réorganiser l'ordre.</p>
+                <p className="text-[11px] text-slate-500">L'image sera automatiquement placée à la fin du diaporama.</p>
               </div>
               <div className="space-y-4">
                 <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider border-b border-slate-800 pb-2 flex items-center justify-between">
@@ -1170,7 +1133,7 @@ export default function AdminDashboardPage() {
                   {isSavingScreenshotOrder && <span className="text-[10px] text-cyan-400 flex items-center gap-1.5 normal-case font-medium"><div className="w-3 h-3 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin"></div>Réorganisation...</span>}
                 </h4>
                 {screenshots.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500 italic">Aucune image ajoutée. L'image par défaut du dashboard sera affichée sur la landing page.</div>
+                  <div className="text-center py-12 text-slate-500 italic">Aucune image ajoutée.</div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {screenshots.map((shot, index) => (
@@ -1209,6 +1172,8 @@ export default function AdminDashboardPage() {
           {/* TAB : CENTRE D'AIDE */}
           {activeTab === "help" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+              {/* Section Test Canaux */}
               <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
                 <div className="mb-6">
                   <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2"><IconWhatsApp className="w-6 h-6 text-emerald-400" />Test des Canaux de Rappel (WhatsApp & Email)</h3>
@@ -1258,6 +1223,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
+              {/* ⭐ Section Liens Réseaux Sociaux avec champ Groupe WhatsApp */}
               <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
                 <div className="mb-6">
                   <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
@@ -1268,10 +1234,30 @@ export default function AdminDashboardPage() {
                 </div>
                 <form onSubmit={handleSaveHelpLinks} className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {/* WhatsApp Support */}
                     <div className="space-y-2">
-                      <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2"><IconWhatsApp className="w-4 h-4 text-green-500" />WhatsApp <span className="text-slate-500 font-normal text-[10px]">(optionnel)</span></label>
-                      <input type="text" value={helpLinks.whatsapp} onChange={(e) => setHelpLinks({ ...helpLinks, whatsapp: e.target.value })} placeholder="+33612345678 ou https://wa.me/33612345678" className="w-full p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all" />
+                      <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2"><IconWhatsApp className="w-4 h-4 text-green-500" />WhatsApp Support <span className="text-slate-500 font-normal text-[10px]">(optionnel)</span></label>
+                      <input type="text" value={helpLinks.whatsapp} onChange={(e) => setHelpLinks({ ...helpLinks, whatsapp: e.target.value })} placeholder="+22890000000 ou https://wa.me/22890000000" className="w-full p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all" />
                     </div>
+
+                    {/* ⭐ NOUVEAU : Lien Chaîne / Groupe WhatsApp */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                        <IconWhatsAppGroup className="w-4 h-4 text-green-400" />
+                        Lien Chaîne WhatsApp Billio
+                        <span className="text-slate-500 font-normal text-[10px]">(optionnel)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={helpLinks.whatsappGroup || ""}
+                        onChange={(e) => setHelpLinks({ ...helpLinks, whatsappGroup: e.target.value })}
+                        placeholder="https://whatsapp.com/channel/..."
+                        className="w-full p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all"
+                      />
+                      <p className="text-[10px] text-slate-500">Collez ici le lien d'invitation à votre chaîne ou groupe WhatsApp (ex: https://whatsapp.com/channel/xxxx)</p>
+                    </div>
+
+                    {/* Facebook */}
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                         <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z" /></svg>
@@ -1279,11 +1265,15 @@ export default function AdminDashboardPage() {
                       </label>
                       <input type="text" value={helpLinks.facebook} onChange={(e) => setHelpLinks({ ...helpLinks, facebook: e.target.value })} placeholder="facebook.com/billio" className="w-full p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" />
                     </div>
+
+                    {/* TikTok */}
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">TikTok <span className="text-slate-500 font-normal text-[10px]">(optionnel)</span></label>
                       <input type="text" value={helpLinks.tiktok} onChange={(e) => setHelpLinks({ ...helpLinks, tiktok: e.target.value })} placeholder="tiktok.com/@billio" className="w-full p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-400/20 transition-all" />
                     </div>
-                    <div className="space-y-2">
+
+                    {/* Site Web */}
+                    <div className="space-y-2 md:col-span-2">
                       <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                         <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
                         Site Web <span className="text-slate-500 font-normal text-[10px]">(optionnel)</span>
@@ -1291,6 +1281,23 @@ export default function AdminDashboardPage() {
                       <input type="text" value={helpLinks.website} onChange={(e) => setHelpLinks({ ...helpLinks, website: e.target.value })} placeholder="www.billio.com" className="w-full p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all" />
                     </div>
                   </div>
+
+                  {/* Preview du lien chaîne WhatsApp */}
+                  {helpLinks.whatsappGroup && (
+                    <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-2xl flex items-center gap-3">
+                      <div className="w-10 h-10 bg-[#25D366] rounded-xl flex items-center justify-center shrink-0">
+                        <IconWhatsAppGroup className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-green-400 uppercase tracking-wider">Aperçu — Chaîne WhatsApp Billio</p>
+                        <p className="text-xs text-slate-400 truncate mt-0.5">{helpLinks.whatsappGroup}</p>
+                      </div>
+                      <a href={helpLinks.whatsappGroup} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-green-400 hover:text-green-300 bg-green-500/10 px-3 py-1.5 rounded-lg border border-green-500/20 shrink-0">
+                        Tester ↗
+                      </a>
+                    </div>
+                  )}
+
                   <div className="pt-4 border-t border-slate-800">
                     <button type="submit" disabled={isSavingHelp} className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl text-sm shadow-xl shadow-blue-600/30 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                       {isSavingHelp ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Sauvegarde...</> : <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Enregistrer les liens</>}
@@ -1299,6 +1306,7 @@ export default function AdminDashboardPage() {
                 </form>
               </div>
 
+              {/* Section Tutoriels */}
               <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
                 <div className="mb-6">
                   <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
@@ -1387,7 +1395,7 @@ export default function AdminDashboardPage() {
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div>
                     <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2"><IconRobot className="w-6 h-6 text-violet-400" /> Configuration de l'assistant</h3>
-                    <p className="text-slate-400 text-sm mt-2 max-w-2xl">Ces réglages sont lus en temps réel par la route <span className="text-violet-300 font-mono text-xs">/api/chat/ai-reply</span>. Modifier le prompt ou les mots-clés n'exige aucun redéploiement.</p>
+                    <p className="text-slate-400 text-sm mt-2 max-w-2xl">Ces réglages sont lus en temps réel par la route <span className="text-violet-300 font-mono text-xs">/api/chat/ai-reply</span>.</p>
                   </div>
                   <button type="button" onClick={() => setAiConfig((prev) => ({ ...prev, enabled: !prev.enabled }))}
                     className={`shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider border transition-all ${aiConfig.enabled ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"}`}>
@@ -1396,7 +1404,7 @@ export default function AdminDashboardPage() {
                   </button>
                 </div>
                 {!aiConfig.enabled && (
-                  <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">L'assistant est coupé globalement. Chaque message utilisateur sera transmis à un conseiller humain.</div>
+                  <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">L'assistant est coupé globalement.</div>
                 )}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
@@ -1435,11 +1443,10 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          {/* TAB : MESSAGERIE (CORRIGÉE) */}
+          {/* TAB : MESSAGERIE */}
           {activeTab === "messages" && (
             <div className="bg-[#0F172A] border border-slate-800 rounded-3xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
               <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] h-[calc(100vh-220px)] min-h-[500px]">
-
                 {/* Liste des conversations */}
                 <div className={`border-r border-slate-800 flex-col bg-slate-950/30 ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
                   <div className="p-5 border-b border-slate-800 space-y-3 shrink-0">
@@ -1461,8 +1468,6 @@ export default function AdminDashboardPage() {
                     </div>
                     {!aiConfig.enabled && <p className="text-[10px] text-red-400 font-semibold">IA globale désactivée — tout remonte vers vous.</p>}
                   </div>
-
-                  {/* Liste scrollable */}
                   <div className="flex-1 overflow-y-auto">
                     {visibleConversations.length === 0 ? (
                       <div className="text-center py-12 px-4 text-slate-500 text-sm italic">
@@ -1474,8 +1479,7 @@ export default function AdminDashboardPage() {
                         const displayName = clientInfo?.companyName || conv.userEmail || "Client inconnu";
                         const isSelected = selectedChatId === conv.id;
                         return (
-                          <button key={conv.id} type="button"
-                            onClick={() => setSelectedChatId(conv.id)}
+                          <button key={conv.id} type="button" onClick={() => setSelectedChatId(conv.id)}
                             className={`w-full text-left p-4 border-b border-slate-800/50 transition-colors flex items-start gap-3 ${isSelected ? "bg-blue-600/10 border-l-4 border-l-blue-500" : conv.needsHuman ? "bg-amber-500/5 hover:bg-amber-500/10 border-l-4 border-l-amber-500" : "hover:bg-slate-800/40 border-l-4 border-l-transparent"}`}>
                             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-700 to-slate-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
                               {displayName.charAt(0).toUpperCase()}
@@ -1512,7 +1516,6 @@ export default function AdminDashboardPage() {
                 <div className={`flex-col bg-slate-900/20 ${selectedChatId ? 'flex' : 'hidden md:flex'}`}>
                   {selectedChatId ? (
                     <>
-                      {/* En-tête conversation */}
                       <div className="p-4 md:p-5 border-b border-slate-800 flex items-center gap-3 bg-slate-900/50 shrink-0">
                         <button type="button" onClick={() => setSelectedChatId(null)} className="md:hidden p-1 text-slate-400 hover:text-white shrink-0">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -1541,8 +1544,6 @@ export default function AdminDashboardPage() {
                           )}
                         </div>
                       </div>
-
-                      {/* Messages — zone scrollable isolée */}
                       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
                         {chatMessages.length === 0 && (
                           <div className="flex items-center justify-center h-full text-slate-600 text-sm italic">Chargement des messages...</div>
@@ -1565,11 +1566,8 @@ export default function AdminDashboardPage() {
                             </div>
                           </div>
                         ))}
-                        {/* Ancre de scroll — toujours en bas */}
                         <div ref={messagesEndRef} />
                       </div>
-
-                      {/* Formulaire de réponse */}
                       <form onSubmit={handleSendReply} className="p-3 md:p-4 border-t border-slate-800 bg-slate-900/50 space-y-2 shrink-0">
                         {selectedAiEnabled && (
                           <p className="text-[10px] text-amber-400 font-medium px-1">Envoyer une réponse coupe automatiquement l'IA sur cette conversation.</p>
