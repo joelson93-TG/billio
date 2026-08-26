@@ -6,6 +6,9 @@ import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, updateDoc, deleteDoc, collection, getDocs } from "firebase/firestore";
 import { auth, db } from "@/firebase";
+import { useSubscription } from "@/components/SubscriptionProvider";
+
+// ─── Utilitaires ──────────────────────────────────────────────────────────────
 
 function numberToWords(num) {
   if (num === null || num === undefined || isNaN(num)) return "0 (0) Franc CFA";
@@ -119,6 +122,7 @@ async function shareFileNatively(blob, filename, text) {
 
 const TOAST_DURATION = 4000;
 
+// ─── Composant Toast ──────────────────────────────────────────────────────────
 function Toast({ toast, onClose }) {
   useEffect(() => {
     if (!toast) return;
@@ -153,6 +157,7 @@ function Toast({ toast, onClose }) {
   );
 }
 
+// ─── Composant ShareModal ─────────────────────────────────────────────────────
 function ShareModal({ open, onClose, defaultPhone, defaultEmail, defaultMessage, subject, filename, getPdfBlob, showToast }) {
   const [tab, setTab] = useState("whatsapp");
   const [phone, setPhone] = useState("");
@@ -245,6 +250,7 @@ function ShareModal({ open, onClose, defaultPhone, defaultEmail, defaultMessage,
   );
 }
 
+// ─── Composant SignatureBlock ──────────────────────────────────────────────────
 function SignatureBlock({ stampSignatureUrl, paymentInfo }) {
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 print:gap-4">
@@ -265,100 +271,38 @@ function SignatureBlock({ stampSignatureUrl, paymentInfo }) {
   );
 }
 
-// ============================================================
-// COMPOSANT EN-TÊTE OPTION 2 — partagé
-// ============================================================
+// ─── Composant HeaderOption2 ──────────────────────────────────────────────────
 function HeaderOption2({ companyData, brandColor }) {
   return (
-    <div
-      className="header-option2"
-      style={{
-        display: "flex",
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        borderBottom: `2px solid ${brandColor}`,
-        paddingBottom: "8px",
-        marginBottom: "6px",
-        position: "relative",
-        zIndex: 10,
-        gap: "12px",
-        flexWrap: "nowrap",
-        width: "100%",
-      }}
-    >
-      {/* GAUCHE : logo + nom + coordonnées */}
-      <div
-        className="header-option2-left"
-        style={{
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-          gap: "10px",
-          flex: "0 0 auto",
-          minWidth: 0,
-        }}
-      >
+    <div className="header-option2" style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottom: `2px solid ${brandColor}`, paddingBottom: "8px", marginBottom: "6px", position: "relative", zIndex: 10, gap: "12px", flexWrap: "nowrap", width: "100%" }}>
+      <div className="header-option2-left" style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: "10px", flex: "0 0 auto", minWidth: 0 }}>
         {companyData?.logoUrl && (
-          <img
-            src={companyData.logoUrl}
-            alt="Logo"
-            crossOrigin="anonymous"
-            className="logo-img-option2"
-            style={{ height: "80px", width: "auto", maxWidth: "150px", objectFit: "contain", display: "block", flexShrink: 0 }}
-            onError={(e) => { e.currentTarget.style.display = "none"; }}
-          />
+          <img src={companyData.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option2" style={{ height: "80px", width: "auto", maxWidth: "150px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
         )}
         <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <p style={{ fontSize: "13px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: "0 0 2px 0", lineHeight: 1.2 }}>
-            {companyData?.companyName || "SOCIÉTÉ"}
-          </p>
-          {companyData?.address && (
-            <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 1px 0", lineHeight: 1.3 }}>
-              {companyData.address}
-            </p>
-          )}
-          <p style={{ fontSize: "10px", color: "#4b5563", margin: 0, lineHeight: 1.3 }}>
-            {companyData?.phone}{companyData?.email ? ` | ${companyData.email}` : ""}
-          </p>
+          <p style={{ fontSize: "13px", fontWeight: "900", color: "#111827", textTransform: "uppercase", margin: "0 0 2px 0", lineHeight: 1.2 }}>{companyData?.companyName || "SOCIÉTÉ"}</p>
+          {companyData?.address && <p style={{ fontSize: "10px", color: "#4b5563", margin: "0 0 1px 0", lineHeight: 1.3 }}>{companyData.address}</p>}
+          <p style={{ fontSize: "10px", color: "#4b5563", margin: 0, lineHeight: 1.3 }}>{companyData?.phone}{companyData?.email ? ` | ${companyData.email}` : ""}</p>
         </div>
       </div>
-
-      {/* DROITE : NIF/RCCM + services — ALIGNÉS À GAUCHE */}
-      <div
-        className="header-option2-right"
-        style={{
-          flex: "1 1 auto",
-          textAlign: "left",
-          paddingLeft: "12px",
-          minWidth: 0,
-          maxWidth: "240px",
-          marginLeft: "auto",
-        }}
-      >
-        <p style={{ fontSize: "10px", fontWeight: "700", color: "#111827", margin: "0 0 3px 0" }}>
-          NIF : {companyData?.nif || "---"} | RCCM : {companyData?.rccm || "---"}
-        </p>
+      <div className="header-option2-right" style={{ flex: "1 1 auto", textAlign: "left", paddingLeft: "12px", minWidth: 0, maxWidth: "240px", marginLeft: "auto" }}>
+        <p style={{ fontSize: "10px", fontWeight: "700", color: "#111827", margin: "0 0 3px 0" }}>NIF : {companyData?.nif || "---"} | RCCM : {companyData?.rccm || "---"}</p>
         {companyData?.services && (
-          <p style={{
-            fontSize: "9px",
-            color: "#4b5563",
-            fontStyle: "italic",
-            margin: 0,
-            lineHeight: "1.5",
-            whiteSpace: "pre-line", /* ✅ respecte les sauts de ligne du user */
-          }}>
-            {companyData.services}
-          </p>
+          <p style={{ fontSize: "9px", color: "#4b5563", fontStyle: "italic", margin: 0, lineHeight: "1.5", whiteSpace: "pre-line" }}>{companyData.services}</p>
         )}
       </div>
     </div>
   );
 }
 
+// ─── Page principale ──────────────────────────────────────────────────────────
 export default function InvoiceDetailOrEditPage() {
   const { id } = useParams();
   const router = useRouter();
+
+  // ✅ Récupère isExpired depuis le contexte
+  const { isExpired } = useSubscription();
+
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -388,7 +332,9 @@ export default function InvoiceDetailOrEditPage() {
   const [printOption, setPrintOption] = useState("1");
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
-  const showToast = useCallback((message, type = "success", title) => { setToast({ message, type, title }); }, []);
+  const showToast = useCallback((message, type = "success", title) => {
+    setToast({ message, type, title });
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -445,8 +391,22 @@ export default function InvoiceDetailOrEditPage() {
   const currentCustomer = customers.find((c) => c.id === (selectedClientId || invoice?.clientId));
   const clientNifDisplay = currentCustomer?.taxId || currentCustomer?.nif || invoice?.clientNif || invoice?.taxId || "N/A";
 
+  // ✅ Bloque la modification si expiré
+  const handleStartEdit = () => {
+    if (isExpired) {
+      showToast("Abonnement expiré. Modification impossible.", "error");
+      return;
+    }
+    setIsEditing(true);
+  };
+
   const handleUpdate = async (e) => {
     e.preventDefault();
+    // ✅ Double vérification
+    if (isExpired) {
+      showToast("Abonnement expiré. Enregistrement impossible.", "error");
+      return;
+    }
     setIsSaving(true);
     const selectedCustomer = customers.find((c) => c.id === selectedClientId);
     try {
@@ -456,12 +416,14 @@ export default function InvoiceDetailOrEditPage() {
       const updatedData = {
         type: invoiceType, number: invoiceNumber, title: invoiceTitle.trim(),
         status: normalizedStatus,
-        paymentDate: paidOrPartial ? paymentDate : "", paymentMethod: paidOrPartial ? paymentMethod : "",
+        paymentDate: paidOrPartial ? paymentDate : "",
+        paymentMethod: paidOrPartial ? paymentMethod : "",
         clientId: selectedClientId,
         clientName: selectedCustomer?.name || selectedCustomer?.businessName || invoice.clientName,
         clientNif: selectedCustomer?.taxId || selectedCustomer?.nif || "",
         taxId: selectedCustomer?.taxId || "",
-        clientAddress: selectedCustomer?.address || "", clientPhone: selectedCustomer?.phone || "",
+        clientAddress: selectedCustomer?.address || "",
+        clientPhone: selectedCustomer?.phone || "",
         clientEmail: selectedCustomer?.email || "",
         date: invoiceDate, items, mainOeuvre: Number(mainOeuvre), remise: montantRemise,
         totalAchat, totalHorsTaxe, tvaAmount, tvaRate: Number(tvaRate), totalTtc,
@@ -477,7 +439,17 @@ export default function InvoiceDetailOrEditPage() {
     } finally { setIsSaving(false); }
   };
 
+  // ✅ Bloque la suppression si expiré
+  const handleDeleteClick = () => {
+    if (isExpired) {
+      showToast("Abonnement expiré. Suppression impossible.", "error");
+      return;
+    }
+    setConfirmingDelete(true);
+  };
+
   const handleDelete = async () => {
+    if (isExpired) return;
     setIsDeleting(true);
     try {
       await deleteDoc(doc(db, "users", currentUser.uid, "invoices", id));
@@ -485,7 +457,8 @@ export default function InvoiceDetailOrEditPage() {
     } catch (error) {
       console.error(error);
       showToast("La suppression a échoué. Réessayez.", "error");
-      setIsDeleting(false); setConfirmingDelete(false);
+      setIsDeleting(false);
+      setConfirmingDelete(false);
     }
   };
 
@@ -518,7 +491,8 @@ export default function InvoiceDetailOrEditPage() {
     } catch (error) {
       console.error("Erreur PDF:", error);
       showToast("Erreur PDF. Impression standard utilisée.", "error");
-      setIsGeneratingPdf(false); window.print();
+      setIsGeneratingPdf(false);
+      window.print();
     } finally { setTimeout(() => { document.title = originalTitle; }, 1000); }
   };
 
@@ -527,7 +501,11 @@ export default function InvoiceDetailOrEditPage() {
     setShowShare(true);
   };
 
-  if (isLoading) return (<div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-12 w-12 border-t-2 border-blue-600 rounded-full"></div></div>);
+  if (isLoading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin h-12 w-12 border-t-2 border-blue-600 rounded-full"></div>
+    </div>
+  );
   if (!invoice) return null;
 
   const brandColor = company.primaryColor || "#2563eb";
@@ -570,59 +548,15 @@ export default function InvoiceDetailOrEditPage() {
           @page { size: A4 portrait; margin: 0 !important; }
           html, body { width: 210mm !important; height: 297mm !important; margin: 0 !important; padding: 0 !important; background: #ffffff !important; overflow: hidden !important; }
           .print-hidden { display: none !important; }
-          #invoice-printable-container {
-            width: 210mm !important; height: 297mm !important; max-height: 297mm !important;
-            overflow: hidden !important; box-sizing: border-box !important;
-            padding: 2mm 12mm 4mm 12mm !important; margin: 0 !important;
-            border-radius: 0 !important; border: none !important; box-shadow: none !important;
-          }
+          #invoice-printable-container { width: 210mm !important; height: 297mm !important; max-height: 297mm !important; overflow: hidden !important; box-sizing: border-box !important; padding: 2mm 12mm 4mm 12mm !important; margin: 0 !important; border-radius: 0 !important; border: none !important; box-shadow: none !important; }
           .invoice-content { position: relative !important; }
-
-          /* ✅ OPTION 2 — forcé row nowrap, services alignés à gauche */
-          .header-option2 {
-            display: flex !important;
-            flex-direction: row !important;
-            justify-content: space-between !important;
-            align-items: flex-start !important;
-            border-bottom: 2px solid ${brandColor} !important;
-            padding-bottom: 4px !important;
-            margin-bottom: 4px !important;
-            position: relative !important;
-            z-index: 10 !important;
-            gap: 12px !important;
-            flex-wrap: nowrap !important;
-            width: 100% !important;
-          }
-          .header-option2-left {
-            display: flex !important;
-            flex-direction: row !important;
-            align-items: center !important;
-            gap: 8px !important;
-            flex: 0 0 auto !important;
-            min-width: 0 !important;
-          }
-          .header-option2-right {
-            text-align: left !important;      /* ✅ aligné à gauche */
-            flex: 1 1 auto !important;
-            padding-left: 12px !important;
-            min-width: 0 !important;
-            max-width: 240px !important;
-            margin-left: auto !important;
-          }
-          .logo-img-option2 {
-            height: 75px !important;
-            width: auto !important;
-            max-width: 150px !important;
-            object-fit: contain !important;
-            display: block !important;
-            flex-shrink: 0 !important;
-          }
-
-          /* OPTION 1 */
+          .header-option2 { display: flex !important; flex-direction: row !important; justify-content: space-between !important; align-items: flex-start !important; border-bottom: 2px solid ${brandColor} !important; padding-bottom: 4px !important; margin-bottom: 4px !important; position: relative !important; z-index: 10 !important; gap: 12px !important; flex-wrap: nowrap !important; width: 100% !important; }
+          .header-option2-left { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 8px !important; flex: 0 0 auto !important; min-width: 0 !important; }
+          .header-option2-right { text-align: left !important; flex: 1 1 auto !important; padding-left: 12px !important; min-width: 0 !important; max-width: 240px !important; margin-left: auto !important; }
+          .logo-img-option2 { height: 75px !important; width: auto !important; max-width: 150px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
           .header-grid-option1 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 14px !important; border-bottom: 1px solid #1f2937 !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; align-items: center !important; }
           .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
           .logo-img-option1 { height: 210px !important; width: auto !important; max-width: 420px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
-
           .invoice-signature-wrapper { min-height: 94mm !important; display: flex !important; flex-direction: column !important; justify-content: flex-end !important; }
           .invoice-signature { margin-bottom: 3mm !important; }
           .invoice-footer { margin-top: 0 !important; padding-bottom: 1mm !important; }
@@ -633,33 +567,105 @@ export default function InvoiceDetailOrEditPage() {
 
       <Toast toast={toast} onClose={() => setToast(null)} />
 
+      {/* ✅ Bannière blocage dans la page facture detail */}
+      {isExpired && (
+        <div className="print-hidden bg-red-600 text-white px-4 py-3 text-center text-sm font-bold flex items-center justify-center gap-4">
+          <span>🔒 Abonnement expiré — Modification et suppression désactivées.</span>
+          <Link href="/settings" className="bg-white text-red-600 px-3 py-1 rounded-lg text-xs font-bold hover:bg-red-50">
+            Renouveler →
+          </Link>
+        </div>
+      )}
+
+      {/* HEADER */}
       <header className="print-hidden min-h-[5rem] bg-white border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between p-4 md:px-8 sticky top-0 z-10 shadow-sm gap-4">
         <div className="flex flex-wrap items-center gap-2 md:gap-4">
-          <Link href="/factures" className="px-3 py-2 md:py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">&larr; <span className="hidden sm:inline">Retour</span></Link>
-          <h1 className="text-lg md:text-xl font-bold truncate max-w-[200px] sm:max-w-xs">{isProforma ? "Proforma" : "Facture"} {invoice.number}</h1>
-          <span className={`px-2 py-1 md:px-3 md:py-1 rounded-full text-[10px] md:text-xs font-bold whitespace-nowrap ${currentStatusBadge.style}`}>{currentStatusBadge.label}</span>
+          <Link href="/factures" className="px-3 py-2 md:py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors">
+            &larr; <span className="hidden sm:inline">Retour</span>
+          </Link>
+          <h1 className="text-lg md:text-xl font-bold truncate max-w-[200px] sm:max-w-xs">
+            {isProforma ? "Proforma" : "Facture"} {invoice.number}
+          </h1>
+          <span className={`px-2 py-1 md:px-3 md:py-1 rounded-full text-[10px] md:text-xs font-bold whitespace-nowrap ${currentStatusBadge.style}`}>
+            {currentStatusBadge.label}
+          </span>
         </div>
+
         <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto">
           {!isEditing ? (
             <>
-              <button onClick={() => setIsEditing(true)} className="flex-1 md:flex-none px-3 md:px-4 py-2 text-white rounded-xl text-sm font-medium bg-gray-800 hover:bg-gray-700">Modifier</button>
-              <button onClick={handlePrint} disabled={isGeneratingPdf} className="flex-1 md:flex-none px-3 md:px-4 py-2 text-white rounded-xl text-sm font-medium shadow-md flex items-center justify-center gap-2 disabled:opacity-60" style={{ backgroundColor: brandColor }}>
+              {/* ✅ Bouton Modifier désactivé si expiré */}
+              <button
+                onClick={handleStartEdit}
+                disabled={isExpired}
+                className={`flex-1 md:flex-none px-3 md:px-4 py-2 text-white rounded-xl text-sm font-medium transition-colors
+                  ${isExpired
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-gray-800 hover:bg-gray-700"
+                  }`}
+              >
+                {isExpired ? "🔒 Modifier" : "Modifier"}
+              </button>
+
+              {/* PDF — toujours accessible */}
+              <button
+                onClick={handlePrint}
+                disabled={isGeneratingPdf}
+                className="flex-1 md:flex-none px-3 md:px-4 py-2 text-white rounded-xl text-sm font-medium shadow-md flex items-center justify-center gap-2 disabled:opacity-60"
+                style={{ backgroundColor: brandColor }}
+              >
                 {isGeneratingPdf && <span className="inline-block h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
                 {isGeneratingPdf ? "Génération..." : "PDF / Imprimer"}
               </button>
-              <button onClick={handleOpenShare} className="flex-1 md:flex-none px-3 md:px-4 py-2 rounded-xl text-sm font-medium bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 flex items-center justify-center gap-1.5">📤 <span>Partager</span></button>
+
+              {/* Partager — toujours accessible */}
+              <button
+                onClick={handleOpenShare}
+                className="flex-1 md:flex-none px-3 md:px-4 py-2 rounded-xl text-sm font-medium bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 flex items-center justify-center gap-1.5"
+              >
+                📤 <span>Partager</span>
+              </button>
+
+              {/* ✅ Bouton Supprimer désactivé si expiré */}
               {!confirmingDelete ? (
-                <button onClick={() => setConfirmingDelete(true)} className="flex-1 md:flex-none px-3 py-2 text-sm font-medium rounded-xl text-red-600 hover:bg-red-50">Supprimer</button>
+                <button
+                  onClick={handleDeleteClick}
+                  disabled={isExpired}
+                  className={`flex-1 md:flex-none px-3 py-2 text-sm font-medium rounded-xl transition-colors
+                    ${isExpired
+                      ? "text-gray-300 cursor-not-allowed"
+                      : "text-red-600 hover:bg-red-50"
+                    }`}
+                >
+                  Supprimer
+                </button>
               ) : (
                 <div className="flex items-center gap-2 w-full md:w-auto bg-red-50 border border-red-200 rounded-xl px-2 py-1">
                   <span className="text-xs text-red-700 font-medium hidden sm:inline">Confirmer ?</span>
-                  <button onClick={handleDelete} disabled={isDeleting} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60">{isDeleting ? "..." : "Oui, supprimer"}</button>
-                  <button onClick={() => setConfirmingDelete(false)} disabled={isDeleting} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-200 hover:bg-gray-300">Annuler</button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={isDeleting || isExpired}
+                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+                  >
+                    {isDeleting ? "..." : "Oui, supprimer"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmingDelete(false)}
+                    disabled={isDeleting}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-200 hover:bg-gray-300"
+                  >
+                    Annuler
+                  </button>
                 </div>
               )}
             </>
           ) : (
-            <button onClick={() => setIsEditing(false)} className="w-full md:w-auto px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl text-sm font-medium transition-colors">Annuler</button>
+            <button
+              onClick={() => setIsEditing(false)}
+              className="w-full md:w-auto px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl text-sm font-medium transition-colors"
+            >
+              Annuler
+            </button>
           )}
         </div>
       </header>
@@ -690,11 +696,10 @@ export default function InvoiceDetailOrEditPage() {
                 : (
                   <div className="header-grid-option1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", borderBottom: "1px solid #1f2937", paddingBottom: "8px", marginBottom: "0", position: "relative", zIndex: 10, alignItems: "center" }}>
                     <div className="logo-container-option1" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "210px", width: "100%", overflow: "hidden", flexShrink: 0 }}>
-                      {company.logoUrl ? (
-                        <img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option1" style={{ height: "210px", width: "auto", maxWidth: "420px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                      ) : (
-                        <span style={{ fontSize: "22px", fontWeight: "900", color: "#1f2937", letterSpacing: "0.05em" }}>{company.companyName || "LOGO"}</span>
-                      )}
+                      {company.logoUrl
+                        ? <img src={company.logoUrl} alt="Logo" crossOrigin="anonymous" className="logo-img-option1" style={{ height: "210px", width: "auto", maxWidth: "420px", objectFit: "contain", display: "block", flexShrink: 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                        : <span style={{ fontSize: "22px", fontWeight: "900", color: "#1f2937", letterSpacing: "0.05em" }}>{company.companyName || "LOGO"}</span>
+                      }
                     </div>
                     <div style={{ borderLeft: `4px solid ${brandColor}`, paddingLeft: "12px", display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "center" }}>
                       <p style={{ fontWeight: "700", textTransform: "uppercase", fontSize: "11px", color: brandColor, margin: "0 0 4px 0" }}>Nos Services</p>
@@ -858,14 +863,10 @@ export default function InvoiceDetailOrEditPage() {
               </div>
             </div>
 
-            {/* TITRE + EN-TÊTE */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold mb-1">
-                  Titre / Objet <span className="text-gray-400 font-normal text-xs">(optionnel)</span>
-                </label>
+                <label className="block text-sm font-semibold mb-1">Titre / Objet <span className="text-gray-400 font-normal text-xs">(optionnel)</span></label>
                 <input type="text" value={invoiceTitle} onChange={(e) => setInvoiceTitle(e.target.value)} placeholder="Ex : Travaux de rénovation bureau..." className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none" maxLength={120} />
-                <p className="text-xs text-gray-400 mt-1">Apparaîtra juste avant le tableau sur la facture.</p>
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-1">Mise en page de l'en-tête</label>
@@ -949,7 +950,11 @@ export default function InvoiceDetailOrEditPage() {
             </div>
 
             <div className="flex justify-end pt-4 border-t">
-              <button type="submit" disabled={isSaving} className="w-full md:w-auto px-6 py-3.5 md:py-2.5 font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-2">
+              <button
+                type="submit"
+                disabled={isSaving || isExpired}
+                className="w-full md:w-auto px-6 py-3.5 md:py-2.5 font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-2"
+              >
                 {isSaving && <span className="inline-block h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
                 {isSaving ? "Enregistrement..." : "Enregistrer les modifications"}
               </button>

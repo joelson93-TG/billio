@@ -1,25 +1,35 @@
+// components/SubscriptionProvider.tsx
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/firebase";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Création du contexte enrichi avec les tarifs dynamiques
-const SubscriptionContext = createContext({ 
-  isExpired: false, 
-  isLoading: true, 
-  pricing: { monthly: 0, sixMonths: 0, yearly: 0 } 
+interface SubscriptionContextType {
+  isExpired: boolean;
+  isLoading: boolean;
+  daysLeft: number | null;
+  pricing: { monthly: number; sixMonths: number; yearly: number };
+}
+
+const SubscriptionContext = createContext<SubscriptionContextType>({
+  isExpired: false,
+  isLoading: true,
+  daysLeft: null,
+  pricing: { monthly: 0, sixMonths: 0, yearly: 0 },
 });
 
-// --- Calcule les jours restants depuis la date de fin (identique à la Cloud Function) ---
 function computeDaysLeft(userData: any): number | null {
   const sub = userData.subscription || {};
   const endDateStr = userData.trialEndDate || userData.endDate;
+
   if (endDateStr) {
-    return Math.ceil((new Date(endDateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    const d = new Date(endDateStr);
+    const days = Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return days;
   }
   if (sub.expiresAt) {
     const d = sub.expiresAt.toDate ? sub.expiresAt.toDate() : new Date(sub.expiresAt);
@@ -28,77 +38,127 @@ function computeDaysLeft(userData: any): number | null {
   return typeof sub.daysLeft === "number" ? sub.daysLeft : null;
 }
 
-export default function SubscriptionProvider({ children }: { children: React.ReactNode }) {
+// ✅ Détermine la bannière selon les jours restants
+function getBannerConfig(daysLeft: number | null, isExpired: boolean) {
+  if (isExpired) {
+    return {
+      show: true,
+      bg: "bg-red-600",
+      text: "text-white",
+      icon: "🔒",
+      message: "Votre abonnement est expiré. Toutes les actions sont bloquées.",
+      urgent: true,
+    };
+  }
+  if (daysLeft !== null && daysLeft <= 3 && daysLeft > 0) {
+    return {
+      show: true,
+      bg: "bg-red-500",
+      text: "text-white",
+      icon: "⚠️",
+      message: `Votre abonnement expire dans ${daysLeft} jour${daysLeft > 1 ? "s" : ""} ! Renouvelez maintenant.`,
+      urgent: true,
+    };
+  }
+  if (daysLeft !== null && daysLeft <= 7 && daysLeft > 3) {
+    return {
+      show: true,
+      bg: "bg-amber-500",
+      text: "text-white",
+      icon: "⏳",
+      message: `Votre abonnement expire dans ${daysLeft} jours. Pensez à le renouveler.`,
+      urgent: false,
+    };
+  }
+  return { show: false, bg: "", text: "", icon: "", message: "", urgent: false };
+}
+
+export default function SubscriptionProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [isExpired, setIsExpired] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  // 🆕 Ajout de sixMonths pour cohérence avec la grille tarifaire réelle (admin + settings client)
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
   const [pricing, setPricing] = useState({ monthly: 0, sixMonths: 0, yearly: 0 });
   const pathname = usePathname();
 
   useEffect(() => {
-    // 1. Récupération des tarifs dynamiques depuis Firestore
-    const fetchPricing = async () => {
-      try {
-        // 🆕 CORRECTION : la grille tarifaire est enregistrée par le dashboard admin
-        // dans "config/pricing" (voir AdminDashboardPage.handleSavePricing), pas
-        // dans "settings/pricing". Cet ancien chemin ne contenait jamais de données,
-        // donc pricing.monthly / pricing.yearly retournaient toujours 0 via useSubscription().
-        const pricingSnap = await getDoc(doc(db, "config", "pricing"));
-        if (pricingSnap.exists()) {
-          const data = pricingSnap.data();
-          setPricing({
-            monthly: Number(data.monthly) || 0,
-            sixMonths: Number(data.sixMonths) || 0,
-            yearly: Number(data.yearly) || 0,
-          });
-        }
-      } catch (error) {
-        console.error("Erreur lors du chargement des tarifs :", error);
+    // Tarifs en temps réel
+    const pricingUnsub = onSnapshot(doc(db, "config", "pricing"), (snap) => {
+      if (snap.exists()) {
+        const d = snap.data();
+        setPricing({
+          monthly: Number(d.monthly) || 0,
+          sixMonths: Number(d.sixMonths) || 0,
+          yearly: Number(d.yearly) || 0,
+        });
       }
-    };
-
-    fetchPricing();
-
-    // 2. Gestion de l'authentification et de l'abonnement utilisateur
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-
-          // Statut : peut être à la racine (subscriptionStatus) ou imbriqué (subscription.status)
-          const status = data.subscriptionStatus || data.subscription?.status;
-
-          // Calcul dynamique des jours restants basé sur la date réelle
-          const daysLeft = computeDaysLeft(data);
-
-          // Logique de blocage : statut explicitement expiré OU essai/actif à 0 jour ou moins
-          const expired =
-            status === "expired" ||
-            (["trial", "active"].includes(status) && daysLeft !== null && daysLeft <= 0);
-
-          setIsExpired(expired);
-        }
-      } else {
-        // Sécurité : si l'utilisateur se déconnecte, on réinitialise l'état
-        setIsExpired(false);
-      }
-      setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    let userUnsub = () => {};
+
+    const authUnsub = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setIsExpired(false);
+        setDaysLeft(null);
+        setIsLoading(false);
+        return;
+      }
+
+      // ✅ Écoute temps réel
+      userUnsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          const status = data.subscriptionStatus || data.subscription?.status;
+          const days = computeDaysLeft(data);
+
+          setDaysLeft(days);
+
+          const expired =
+            status === "expired" ||
+            (["trial", "active"].includes(status) &&
+              days !== null &&
+              days <= 0);
+
+          setIsExpired(expired);
+        } else {
+          setIsExpired(true);
+          setDaysLeft(0);
+        }
+        setIsLoading(false);
+      });
+    });
+
+    return () => {
+      pricingUnsub();
+      authUnsub();
+      userUnsub();
+    };
   }, []);
 
-  // On n'affiche pas la bannière sur la page des paramètres elle-même
-  const showBanner = isExpired && pathname !== "/settings";
+  const isSettingsPage = pathname === "/settings";
+  const banner = getBannerConfig(daysLeft, isExpired);
+  const showBanner = banner.show && !isSettingsPage;
 
   return (
-    <SubscriptionContext.Provider value={{ isExpired, isLoading, pricing }}>
+    <SubscriptionContext.Provider value={{ isExpired, isLoading, daysLeft, pricing }}>
+      {/* ✅ Bannière progressive */}
       {showBanner && (
-        <div className="bg-red-600 text-white px-4 py-3 text-center text-sm font-bold flex items-center justify-center gap-4 shrink-0 shadow-md z-50">
-          <span>⚠️ Votre période d'essai est arrivée à échéance. Les actions sont bloquées.</span>
-          <Link href="/settings" className="bg-white text-red-600 px-4 py-1.5 rounded-lg hover:bg-red-50 transition-colors shadow-sm">
-            Régler mon abonnement →
+        <div className={`${banner.bg} ${banner.text} px-4 py-3 text-center text-sm font-bold flex items-center justify-center gap-4 shrink-0 shadow-md z-50`}>
+          <span>
+            {banner.icon} {banner.message}
+          </span>
+          <Link
+            href="/settings"
+            className={`px-4 py-1.5 rounded-lg transition-colors shadow-sm text-xs font-bold whitespace-nowrap
+              ${banner.urgent
+                ? "bg-white text-red-600 hover:bg-red-50"
+                : "bg-white text-amber-700 hover:bg-amber-50"
+              }`}
+          >
+            Renouveler →
           </Link>
         </div>
       )}
@@ -107,5 +167,4 @@ export default function SubscriptionProvider({ children }: { children: React.Rea
   );
 }
 
-// Hook personnalisé pour accéder à l'état d'abonnement, l'état de chargement et aux tarifs dynamiques
 export const useSubscription = () => useContext(SubscriptionContext);
