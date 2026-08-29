@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, getDocs, doc, getDoc, setDoc, addDoc, deleteDoc, updateDoc,
-  query, orderBy, onSnapshot, serverTimestamp, increment
+  query, orderBy, onSnapshot, serverTimestamp, increment, limit
 } from "firebase/firestore";
 import {
   ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject
@@ -15,7 +15,9 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from "recharts";
 
+// ============================================================
 // --- Icônes SVG ---
+// ============================================================
 const IconOverview = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
 const IconUsers = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
 const IconPricing = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
@@ -38,14 +40,23 @@ const IconRobot = ({ className = "w-5 h-5" }) => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6m-3-1v4m-7 5h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2zm3 5h.01M15 14h.01M8 18h8" />
   </svg>
 );
-
-// ⭐ NOUVELLE ICÔNE : Groupe WhatsApp / Communauté
 const IconWhatsAppGroup = ({ className = "w-4 h-4" }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
   </svg>
 );
+// ⭐ Icône du Journal des Envois (nouvelle)
+const IconLogs = ({ className = "w-5 h-5" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+const IconCheck = ({ className = "w-4 h-4" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>;
+const IconX = ({ className = "w-4 h-4" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
 
+// ============================================================
+// --- Helpers ---
+// ============================================================
 const formatChatTime = (timestamp) => {
   if (!timestamp?.toDate) return "...";
   return timestamp.toDate().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -53,6 +64,11 @@ const formatChatTime = (timestamp) => {
 const formatLastRun = (timestamp) => {
   if (!timestamp?.toDate) return "Aucune exécution enregistrée";
   return timestamp.toDate().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+};
+// ⭐ Nouveau formatteur pour le journal (avec secondes, plus précis)
+const formatLogTime = (timestamp) => {
+  if (!timestamp?.toDate) return "À l'instant";
+  return timestamp.toDate().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
 };
 const isValidEmail = (email) => typeof email === "string" && email.includes("@");
 const computeDaysLeft = (userData) => {
@@ -89,6 +105,9 @@ const DEFAULT_ESCALATION_KEYWORDS = [
   "urgent", "parler à un humain", "conseiller", "réclamation", "arnaque",
 ];
 
+// ============================================================
+// COMPOSANT PRINCIPAL
+// ============================================================
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
@@ -116,7 +135,6 @@ export default function AdminDashboardPage() {
   const pricingRef = useRef(pricing);
   useEffect(() => { pricingRef.current = pricing; }, [pricing]);
 
-  // ⭐ Ajout de whatsappGroup dans helpLinks
   const [helpLinks, setHelpLinks] = useState({ whatsapp: "", facebook: "", tiktok: "", website: "", whatsappGroup: "" });
   const [tutorials, setTutorials] = useState([]);
   const [newTutorial, setNewTutorial] = useState({ title: "", embedUrl: "" });
@@ -131,6 +149,7 @@ export default function AdminDashboardPage() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+
   const [conversations, setConversations] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
@@ -142,6 +161,7 @@ export default function AdminDashboardPage() {
   const chatUnsubRef = useRef(null);
   const [chatFilter, setChatFilter] = useState("all");
   const [isUpdatingChatAi, setIsUpdatingChatAi] = useState(false);
+
   const [aiConfig, setAiConfig] = useState({
     enabled: true,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
@@ -149,6 +169,11 @@ export default function AdminDashboardPage() {
   });
   const [isSavingAi, setIsSavingAi] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
+
+  // ⭐ NOUVEAU : Journal des envois (Logs)
+  const [notificationLogs, setNotificationLogs] = useState([]);
+  const [logsChannelFilter, setLogsChannelFilter] = useState("all");
+  const [logsSearchTerm, setLogsSearchTerm] = useState("");
 
   // ── Authentification admin ──
   useEffect(() => {
@@ -178,6 +203,16 @@ export default function AdminDashboardPage() {
     if (!isAdminVerified) return;
     const statsRef = doc(db, "stats", "reminderRun");
     const unsub = onSnapshot(statsRef, (snap) => { if (snap.exists()) setReminderStats(snap.data()); }, (error) => { console.error("Erreur stats rappels :", error); });
+    return () => unsub();
+  }, [isAdminVerified]);
+
+  // ⭐ NOUVEAU : Journal des envois en TEMPS RÉEL ──
+  useEffect(() => {
+    if (!isAdminVerified) return;
+    const q = query(collection(db, "notificationLogs"), orderBy("createdAt", "desc"), limit(200));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setNotificationLogs(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (error) => { console.error("Erreur journal notifications :", error); });
     return () => unsub();
   }, [isAdminVerified]);
 
@@ -305,6 +340,18 @@ export default function AdminDashboardPage() {
     return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
   }, [previewUrl]);
 
+  // ⭐ NOUVEAU : Fonction utilitaire pour écrire un log dans Firestore
+  const logNotification = async (entry) => {
+    try {
+      await addDoc(collection(db, "notificationLogs"), {
+        ...entry,
+        createdAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.error("Erreur enregistrement log notification :", e);
+    }
+  };
+
   const handleToggleUserDisabled = async (user) => {
     const action = user.forceDisabled ? "réactiver" : "désactiver";
     if (!confirm(`Voulez-vous vraiment ${action} le compte de "${user.companyName}" ?\n\n${user.forceDisabled ? "L'utilisateur pourra à nouveau accéder à son compte." : "L'utilisateur ne pourra plus accéder à son compte jusqu'à réactivation."}`)) return;
@@ -407,7 +454,6 @@ export default function AdminDashboardPage() {
     return `https://${trimmed}`;
   };
 
-  // ⭐ handleSaveHelpLinks mis à jour pour inclure whatsappGroup
   const handleSaveHelpLinks = async (e) => {
     e.preventDefault();
     setIsSavingHelp(true);
@@ -474,7 +520,6 @@ export default function AdminDashboardPage() {
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
   };
-
   const handleFileSelect = (e) => { validateAndSetFile(e.target.files?.[0]); };
   const handleDrop = (e) => { e.preventDefault(); setIsDraggingOver(false); validateAndSetFile(e.dataTransfer.files?.[0]); };
   const handleDragOver = (e) => { e.preventDefault(); setIsDraggingOver(true); };
@@ -543,25 +588,56 @@ export default function AdminDashboardPage() {
 
   const isReminderTarget = (u) => (!!u.phone || isValidEmail(u.email)) && (u.status === "expired" || u.daysLeft <= 3) && u.status !== "disabled";
 
+  // ⭐ MODIFIÉ : ajout du logging Firestore à chaque envoi
   const handleSendReminder = async (user) => {
     const channel = user.phone ? "whatsapp" : (isValidEmail(user.email) ? "email" : null);
     if (!channel) { alert("Ce client n'a ni numéro de téléphone ni email valide"); return; }
     setSendingReminderTo(user.uid);
+    const messageContent = channel === "whatsapp" ? buildReminderMessage(user) : null;
     try {
       let res;
       if (channel === "whatsapp") {
-        res = await fetch("/api/whatsapp/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: user.phone, message: buildReminderMessage(user) }) });
+        res = await fetch("/api/whatsapp/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: user.phone, message: messageContent }) });
       } else {
         res = await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: user.email, companyName: user.companyName, status: user.status, daysLeft: user.daysLeft }) });
       }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       await updateDoc(doc(db, "users", user.uid), { lastReminderSentAt: serverTimestamp(), lastReminderChannel: channel });
+
+      await logNotification({
+        channel,
+        to: channel === "whatsapp" ? user.phone : user.email,
+        companyName: user.companyName,
+        uid: user.uid,
+        status: user.status,
+        daysLeft: user.daysLeft,
+        success: true,
+        error: null,
+        messagePreview: channel === "whatsapp" ? (messageContent || "").slice(0, 220) : `Email de rappel — statut : ${user.status}`,
+        triggeredBy: "manual",
+      });
+
       alert(`✅ Rappel envoyé à ${user.companyName} par ${channel === "whatsapp" ? "WhatsApp" : "Email"}`);
-    } catch (error) { alert(`❌ Erreur : ${error.message}`); }
+    } catch (error) {
+      await logNotification({
+        channel: channel || "unknown",
+        to: channel === "whatsapp" ? user.phone : user.email,
+        companyName: user.companyName,
+        uid: user.uid,
+        status: user.status,
+        daysLeft: user.daysLeft,
+        success: false,
+        error: error.message,
+        messagePreview: null,
+        triggeredBy: "manual",
+      });
+      alert(`❌ Erreur : ${error.message}`);
+    }
     finally { setSendingReminderTo(null); }
   };
 
+  // ⭐ MODIFIÉ : ajout du logging Firestore pour chaque cible (bulk)
   const handleBulkReminder = async () => {
     const targets = usersList.filter(isReminderTarget);
     if (targets.length === 0) { alert("Aucun client à rappeler (expiré ou ≤ 3 jours) parmi les clients joignables."); return; }
@@ -576,19 +652,58 @@ export default function AdminDashboardPage() {
         const res = await fetch("/api/whatsapp/bulk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages, delayMin: 3, delayMax: 8 }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        await Promise.all(whatsappTargets.map((u) => updateDoc(doc(db, "users", u.uid), { lastReminderSentAt: serverTimestamp(), lastReminderChannel: "whatsapp" }).catch(() => {})));
+
+        await Promise.all(whatsappTargets.map((u) =>
+          Promise.all([
+            updateDoc(doc(db, "users", u.uid), { lastReminderSentAt: serverTimestamp(), lastReminderChannel: "whatsapp" }).catch(() => {}),
+            logNotification({
+              channel: "whatsapp",
+              to: u.phone,
+              companyName: u.companyName,
+              uid: u.uid,
+              status: u.status,
+              daysLeft: u.daysLeft,
+              success: true,
+              error: null,
+              messagePreview: buildReminderMessage(u).slice(0, 220),
+              triggeredBy: "manual-bulk",
+            })
+          ])
+        ));
       } else if (whatsappTargets.length === 1) { await handleSendReminder(whatsappTargets[0]); }
+
       for (const u of emailTargets) {
         try {
           const res = await fetch("/api/email/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: u.email, companyName: u.companyName, status: u.status, daysLeft: u.daysLeft }) });
-          if (res.ok) await updateDoc(doc(db, "users", u.uid), { lastReminderSentAt: serverTimestamp(), lastReminderChannel: "email" });
-        } catch (e) { console.error(`Erreur email pour ${u.uid} :`, e); }
+          const success = res.ok;
+          if (success) await updateDoc(doc(db, "users", u.uid), { lastReminderSentAt: serverTimestamp(), lastReminderChannel: "email" });
+          await logNotification({
+            channel: "email",
+            to: u.email,
+            companyName: u.companyName,
+            uid: u.uid,
+            status: u.status,
+            daysLeft: u.daysLeft,
+            success,
+            error: success ? null : "Échec de l'envoi email",
+            messagePreview: `Email de rappel — statut : ${u.status}`,
+            triggeredBy: "manual-bulk",
+          });
+        } catch (e) {
+          console.error(`Erreur email pour ${u.uid} :`, e);
+          await logNotification({
+            channel: "email", to: u.email, companyName: u.companyName, uid: u.uid,
+            status: u.status, daysLeft: u.daysLeft, success: false, error: e.message,
+            messagePreview: null, triggeredBy: "manual-bulk",
+          });
+        }
       }
       alert(`✅ Envoi groupé terminé : ${whatsappTargets.length} WhatsApp, ${emailTargets.length} Email`);
     } catch (error) { alert(`❌ Erreur : ${error.message}`); }
     finally { setIsSendingBulkReminder(false); }
   };
 
+  // ⭐ MODIFIÉ : logging des tests aussi (triggeredBy: "test")
   const handleTestAfrimsg = async (e) => {
     e.preventDefault(); setIsTestingAfrimsg(true); setAfrimsgTestResult(null);
     try {
@@ -596,7 +711,11 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Erreur inconnue");
       setAfrimsgTestResult({ success: true, message: data.message });
-    } catch (error) { setAfrimsgTestResult({ success: false, message: error.message }); }
+      await logNotification({ channel: "whatsapp", to: testPhoneNumber, companyName: "Test manuel", uid: null, status: null, daysLeft: null, success: true, error: null, messagePreview: "Message de test AfriMsg", triggeredBy: "test" });
+    } catch (error) {
+      setAfrimsgTestResult({ success: false, message: error.message });
+      await logNotification({ channel: "whatsapp", to: testPhoneNumber, companyName: "Test manuel", uid: null, status: null, daysLeft: null, success: false, error: error.message, messagePreview: null, triggeredBy: "test" });
+    }
     finally { setIsTestingAfrimsg(false); }
   };
 
@@ -607,7 +726,11 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Erreur inconnue");
       setEmailTestResult({ success: true, message: data.message });
-    } catch (error) { setEmailTestResult({ success: false, message: error.message }); }
+      await logNotification({ channel: "email", to: testEmailAddress, companyName: "Test manuel", uid: null, status: null, daysLeft: null, success: true, error: null, messagePreview: "Email de test Resend", triggeredBy: "test" });
+    } catch (error) {
+      setEmailTestResult({ success: false, message: error.message });
+      await logNotification({ channel: "email", to: testEmailAddress, companyName: "Test manuel", uid: null, status: null, daysLeft: null, success: false, error: error.message, messagePreview: null, triggeredBy: "test" });
+    }
     finally { setIsTestingEmail(false); }
   };
 
@@ -648,6 +771,19 @@ export default function AdminDashboardPage() {
       return 0;
     });
 
+  // ⭐ NOUVEAU : Filtrage du journal des envois
+  const filteredLogs = notificationLogs.filter((log) => {
+    const matchesChannel =
+      logsChannelFilter === "all" ||
+      (logsChannelFilter === "failed" ? log.success === false : log.channel === logsChannelFilter);
+    const term = logsSearchTerm.toLowerCase();
+    const matchesSearch =
+      !term ||
+      (log.companyName || "").toLowerCase().includes(term) ||
+      (log.to || "").toLowerCase().includes(term);
+    return matchesChannel && matchesSearch;
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0B1120] text-white">
@@ -659,6 +795,7 @@ export default function AdminDashboardPage() {
     );
   }
 
+  // ⭐ Ajout de l'onglet "logs"
   const navItems = [
     { key: "overview", label: "Vue d'ensemble", icon: <IconOverview /> },
     { key: "users", label: "Répertoire Clients", icon: <IconUsers /> },
@@ -667,12 +804,14 @@ export default function AdminDashboardPage() {
     { key: "help", label: "Centre d'aide", icon: <IconHelp /> },
     { key: "ai", label: "Assistant IA", icon: <IconRobot /> },
     { key: "messages", label: "Messagerie", icon: <IconChat />, badge: totalUnreadMessages, extraBadge: needsHumanCount },
+    { key: "logs", label: "Journal des Envois", icon: <IconLogs /> },
   ];
 
   const totalReminderSent = reminderStats ? (reminderStats.sentWhatsappCount || 0) + (reminderStats.sentEmailCount || 0) : 0;
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-100 flex font-sans selection:bg-blue-500/30">
+
       {/* SIDEBAR DESKTOP */}
       <aside className="w-72 bg-[#0F172A] border-r border-slate-800 flex-col justify-between hidden md:flex shadow-2xl z-20">
         <div>
@@ -769,6 +908,7 @@ export default function AdminDashboardPage() {
               {activeTab === "help" && <><span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.8)] shrink-0"></span><span className="truncate">Centre d'aide</span></>}
               {activeTab === "ai" && <><span className="w-2 h-2 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.8)] shrink-0"></span><span className="truncate">Assistant IA</span></>}
               {activeTab === "messages" && <><span className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.8)] shrink-0"></span><span className="truncate">Messagerie</span></>}
+              {activeTab === "logs" && <><span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] shrink-0"></span><span className="truncate">Journal des Envois</span></>}
             </h1>
           </div>
           {lastSyncAt && (
@@ -898,7 +1038,6 @@ export default function AdminDashboardPage() {
                   </button>
                 ))}
               </div>
-
               {reminderStats && (
                 <div className="mb-8 bg-slate-900/40 border border-slate-800 rounded-2xl p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
@@ -948,7 +1087,6 @@ export default function AdminDashboardPage() {
                   )}
                 </div>
               )}
-
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[800px] text-left border-collapse text-sm">
                   <thead>
@@ -1080,7 +1218,7 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="pt-4 border-t border-slate-800">
                   <button type="submit" disabled={isSavingPricing} className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl text-sm shadow-xl shadow-blue-600/30 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                    {isSavingPricing ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Sauvegarde...</> : <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Enregistrer les nouveaux tarifs</>}
+                    {isSavingPricing ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Sauvegarde...</> : <><IconCheck className="w-5 h-5" /> Enregistrer les nouveaux tarifs</>}
                   </button>
                 </div>
               </form>
@@ -1121,11 +1259,11 @@ export default function AdminDashboardPage() {
                       </div>
                     )}
                     <button type="button" onClick={handleUploadScreenshot} disabled={isUploading} className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-cyan-600/30 transition-all flex justify-center items-center gap-2 disabled:opacity-50">
-                      {isUploading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>Envoi en cours...</> : <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Confirmer et ajouter au diaporama</>}
+                      {isUploading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>Envoi en cours...</> : <><IconCheck className="w-5 h-5" />Confirmer et ajouter au diaporama</>}
                     </button>
+                    <p className="text-[11px] text-slate-500">L'image sera automatiquement placée à la fin du diaporama.</p>
                   </div>
                 )}
-                <p className="text-[11px] text-slate-500">L'image sera automatiquement placée à la fin du diaporama.</p>
               </div>
               <div className="space-y-4">
                 <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider border-b border-slate-800 pb-2 flex items-center justify-between">
@@ -1151,13 +1289,13 @@ export default function AdminDashboardPage() {
                             <div className="relative aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
                               <img src={shot.url} alt={`Capture ${index + 1}`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.opacity = "0.2"; }} />
                               <span className="absolute top-2 left-2 bg-black/70 text-white text-[10px] font-black px-2 py-1 rounded-lg">#{index + 1}</span>
-                              {shot.storagePath && (<span className="absolute top-2 right-2 bg-emerald-500/80 text-white text-[9px] font-bold px-2 py-1 rounded-lg flex items-center gap-1"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Storage</span>)}
+                              {shot.storagePath && (<span className="absolute top-2 right-2 bg-emerald-500/80 text-white text-[9px] font-bold px-2 py-1 rounded-lg flex items-center gap-1"><IconCheck className="w-3 h-3" />Storage</span>)}
                             </div>
                             <div className="flex items-center gap-2">
                               <button onClick={() => handleMoveScreenshot(index, "up")} disabled={index === 0 || isSavingScreenshotOrder} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Déplacer vers le haut"><IconArrowUp /></button>
                               <button onClick={() => handleMoveScreenshot(index, "down")} disabled={index === screenshots.length - 1 || isSavingScreenshotOrder} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Déplacer vers le bas"><IconArrowDown /></button>
-                              <button onClick={() => { setEditingScreenshotId(shot.id); setEditingScreenshotUrl(shot.url); }} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>Modifier</button>
-                              <button onClick={() => handleDeleteScreenshot(shot.id)} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors border border-red-500/20" title="Supprimer"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                              <button onClick={() => { setEditingScreenshotId(shot.id); setEditingScreenshotUrl(shot.url); }} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1">Modifier</button>
+                              <button onClick={() => handleDeleteScreenshot(shot.id)} className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors border border-red-500/20" title="Supprimer"><IconX className="w-4 h-4" /></button>
                             </div>
                           </>
                         )}
@@ -1172,8 +1310,6 @@ export default function AdminDashboardPage() {
           {/* TAB : CENTRE D'AIDE */}
           {activeTab === "help" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
-              {/* Section Test Canaux */}
               <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
                 <div className="mb-6">
                   <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2"><IconWhatsApp className="w-6 h-6 text-emerald-400" />Test des Canaux de Rappel (WhatsApp & Email)</h3>
@@ -1186,14 +1322,14 @@ export default function AdminDashboardPage() {
                       <div className="flex flex-col sm:flex-row gap-2">
                         <input type="text" value={testPhoneNumber} onChange={(e) => setTestPhoneNumber(e.target.value)} placeholder="Ex: 22890000000" className="flex-1 p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all" required />
                         <button type="submit" disabled={isTestingAfrimsg} className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-emerald-600/30 transition-all flex justify-center items-center gap-2 disabled:opacity-50 shrink-0">
-                          {isTestingAfrimsg ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
+                          {isTestingAfrimsg ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <IconSend />}
                           Tester
                         </button>
                       </div>
                       {afrimsgTestResult && (
                         <div className={`p-3 rounded-xl border text-xs font-medium ${afrimsgTestResult.success ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
                           <div className="flex items-start gap-2">
-                            {afrimsgTestResult.success ? <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> : <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
+                            {afrimsgTestResult.success ? <IconCheck className="w-4 h-4 shrink-0 mt-0.5" /> : <IconX className="w-4 h-4 shrink-0 mt-0.5" />}
                             <span>{afrimsgTestResult.message}</span>
                           </div>
                         </div>
@@ -1206,14 +1342,14 @@ export default function AdminDashboardPage() {
                       <div className="flex flex-col sm:flex-row gap-2">
                         <input type="email" value={testEmailAddress} onChange={(e) => setTestEmailAddress(e.target.value)} placeholder="Ex: test@exemple.com" className="flex-1 p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" required />
                         <button type="submit" disabled={isTestingEmail} className="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-blue-600/30 transition-all flex justify-center items-center gap-2 disabled:opacity-50 shrink-0">
-                          {isTestingEmail ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
+                          {isTestingEmail ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <IconSend />}
                           Tester
                         </button>
                       </div>
                       {emailTestResult && (
                         <div className={`p-3 rounded-xl border text-xs font-medium ${emailTestResult.success ? "bg-blue-500/10 border-blue-500/20 text-blue-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
                           <div className="flex items-start gap-2">
-                            {emailTestResult.success ? <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> : <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
+                            {emailTestResult.success ? <IconCheck className="w-4 h-4 shrink-0 mt-0.5" /> : <IconX className="w-4 h-4 shrink-0 mt-0.5" />}
                             <span>{emailTestResult.message}</span>
                           </div>
                         </div>
@@ -1223,7 +1359,6 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* ⭐ Section Liens Réseaux Sociaux avec champ Groupe WhatsApp */}
               <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
                 <div className="mb-6">
                   <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
@@ -1234,13 +1369,10 @@ export default function AdminDashboardPage() {
                 </div>
                 <form onSubmit={handleSaveHelpLinks} className="space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {/* WhatsApp Support */}
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2"><IconWhatsApp className="w-4 h-4 text-green-500" />WhatsApp Support <span className="text-slate-500 font-normal text-[10px]">(optionnel)</span></label>
                       <input type="text" value={helpLinks.whatsapp} onChange={(e) => setHelpLinks({ ...helpLinks, whatsapp: e.target.value })} placeholder="+22890000000 ou https://wa.me/22890000000" className="w-full p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all" />
                     </div>
-
-                    {/* ⭐ NOUVEAU : Lien Chaîne / Groupe WhatsApp */}
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                         <IconWhatsAppGroup className="w-4 h-4 text-green-400" />
@@ -1256,8 +1388,6 @@ export default function AdminDashboardPage() {
                       />
                       <p className="text-[10px] text-slate-500">Collez ici le lien d'invitation à votre chaîne ou groupe WhatsApp (ex: https://whatsapp.com/channel/xxxx)</p>
                     </div>
-
-                    {/* Facebook */}
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                         <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z" /></svg>
@@ -1265,14 +1395,10 @@ export default function AdminDashboardPage() {
                       </label>
                       <input type="text" value={helpLinks.facebook} onChange={(e) => setHelpLinks({ ...helpLinks, facebook: e.target.value })} placeholder="facebook.com/billio" className="w-full p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" />
                     </div>
-
-                    {/* TikTok */}
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">TikTok <span className="text-slate-500 font-normal text-[10px]">(optionnel)</span></label>
                       <input type="text" value={helpLinks.tiktok} onChange={(e) => setHelpLinks({ ...helpLinks, tiktok: e.target.value })} placeholder="tiktok.com/@billio" className="w-full p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-400/20 transition-all" />
                     </div>
-
-                    {/* Site Web */}
                     <div className="space-y-2 md:col-span-2">
                       <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                         <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
@@ -1281,8 +1407,6 @@ export default function AdminDashboardPage() {
                       <input type="text" value={helpLinks.website} onChange={(e) => setHelpLinks({ ...helpLinks, website: e.target.value })} placeholder="www.billio.com" className="w-full p-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all" />
                     </div>
                   </div>
-
-                  {/* Preview du lien chaîne WhatsApp */}
                   {helpLinks.whatsappGroup && (
                     <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-2xl flex items-center gap-3">
                       <div className="w-10 h-10 bg-[#25D366] rounded-xl flex items-center justify-center shrink-0">
@@ -1297,16 +1421,14 @@ export default function AdminDashboardPage() {
                       </a>
                     </div>
                   )}
-
                   <div className="pt-4 border-t border-slate-800">
                     <button type="submit" disabled={isSavingHelp} className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl text-sm shadow-xl shadow-blue-600/30 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                      {isSavingHelp ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Sauvegarde...</> : <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Enregistrer les liens</>}
+                      {isSavingHelp ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Sauvegarde...</> : <><IconCheck className="w-5 h-5" /> Enregistrer les liens</>}
                     </button>
                   </div>
                 </form>
               </div>
 
-              {/* Section Tutoriels */}
               <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
                 <div className="mb-6">
                   <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
@@ -1356,8 +1478,8 @@ export default function AdminDashboardPage() {
                               <div className="space-y-3">
                                 <h5 className="font-bold text-white text-sm">{tutorial.title}</h5>
                                 <div className="flex gap-2">
-                                  <button onClick={() => setEditingTutorial(tutorial)} className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>Modifier</button>
-                                  <button onClick={() => handleDeleteTutorial(tutorial.id)} className="flex-1 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1 border border-red-500/20"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>Supprimer</button>
+                                  <button onClick={() => setEditingTutorial(tutorial)} className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1">Modifier</button>
+                                  <button onClick={() => handleDeleteTutorial(tutorial.id)} className="flex-1 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1 border border-red-500/20">Supprimer</button>
                                 </div>
                               </div>
                             </>
@@ -1436,19 +1558,20 @@ export default function AdminDashboardPage() {
                 <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row gap-3">
                   <button type="button" onClick={handleResetAiDefaults} className="sm:w-auto px-5 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl text-sm border border-slate-700">Restaurer les défauts</button>
                   <button type="submit" disabled={isSavingAi} className="flex-1 py-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black rounded-2xl text-sm shadow-xl shadow-violet-600/30 transition-all transform hover:scale-[1.01] active:scale-[0.99] flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                    {isSavingAi ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Sauvegarde...</> : <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Enregistrer la configuration IA</>}
+                    {isSavingAi ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Sauvegarde...</> : <><IconCheck className="w-5 h-5" />Enregistrer la configuration IA</>}
                   </button>
                 </div>
               </form>
             </div>
           )}
 
-          {/* TAB : MESSAGERIE */}
+          {/* ⭐ TAB : MESSAGERIE — BUG CORRIGÉ (min-h-0 partout dans la chaîne flex) */}
           {activeTab === "messages" && (
             <div className="bg-[#0F172A] border border-slate-800 rounded-3xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
-              <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] h-[calc(100vh-220px)] min-h-[500px]">
+              <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] h-[calc(100vh-220px)] min-h-[520px]">
+
                 {/* Liste des conversations */}
-                <div className={`border-r border-slate-800 flex-col bg-slate-950/30 ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
+                <div className={`min-h-0 h-full border-r border-slate-800 flex-col bg-slate-950/30 ${selectedChatId ? 'hidden md:flex' : 'flex'}`}>
                   <div className="p-5 border-b border-slate-800 space-y-3 shrink-0">
                     <h3 className="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-2">
                       <IconChat /> Conversations ({conversations.length})
@@ -1468,7 +1591,9 @@ export default function AdminDashboardPage() {
                     </div>
                     {!aiConfig.enabled && <p className="text-[10px] text-red-400 font-semibold">IA globale désactivée — tout remonte vers vous.</p>}
                   </div>
-                  <div className="flex-1 overflow-y-auto">
+
+                  {/* ⭐ FIX : min-h-0 pour permettre le scroll de la liste */}
+                  <div className="flex-1 min-h-0 overflow-y-auto">
                     {visibleConversations.length === 0 ? (
                       <div className="text-center py-12 px-4 text-slate-500 text-sm italic">
                         {conversations.length === 0 ? "Aucun message reçu pour le moment." : "Aucune conversation dans ce filtre."}
@@ -1513,7 +1638,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Zone de conversation */}
-                <div className={`flex-col bg-slate-900/20 ${selectedChatId ? 'flex' : 'hidden md:flex'}`}>
+                <div className={`min-h-0 h-full flex-col bg-slate-900/20 ${selectedChatId ? 'flex' : 'hidden md:flex'}`}>
                   {selectedChatId ? (
                     <>
                       <div className="p-4 md:p-5 border-b border-slate-800 flex items-center gap-3 bg-slate-900/50 shrink-0">
@@ -1544,7 +1669,9 @@ export default function AdminDashboardPage() {
                           )}
                         </div>
                       </div>
-                      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+
+                      {/* ⭐ FIX PRINCIPAL DU BUG : min-h-0 sur le conteneur scrollable des messages */}
+                      <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-4">
                         {chatMessages.length === 0 && (
                           <div className="flex items-center justify-center h-full text-slate-600 text-sm italic">Chargement des messages...</div>
                         )}
@@ -1557,7 +1684,7 @@ export default function AdminDashboardPage() {
                                   <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wide">Assistant IA</span>
                                 </div>
                               )}
-                              <div className={`p-3 rounded-2xl text-sm shadow-sm ${msg.isAdmin ? 'bg-blue-600 text-white rounded-br-none' : msg.isAI ? 'bg-indigo-500/15 text-indigo-100 border border-indigo-500/30 rounded-bl-none' : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-none'}`}>
+                              <div className={`p-3 rounded-2xl text-sm shadow-sm break-words ${msg.isAdmin ? 'bg-blue-600 text-white rounded-br-none' : msg.isAI ? 'bg-indigo-500/15 text-indigo-100 border border-indigo-500/30 rounded-bl-none' : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-none'}`}>
                                 {msg.text}
                               </div>
                               <div className={`text-[10px] text-slate-500 mt-1 ${msg.isAdmin ? 'text-right' : 'text-left'}`}>
@@ -1568,6 +1695,7 @@ export default function AdminDashboardPage() {
                         ))}
                         <div ref={messagesEndRef} />
                       </div>
+
                       <form onSubmit={handleSendReply} className="p-3 md:p-4 border-t border-slate-800 bg-slate-900/50 space-y-2 shrink-0">
                         {selectedAiEnabled && (
                           <p className="text-[10px] text-amber-400 font-medium px-1">Envoyer une réponse coupe automatiquement l'IA sur cette conversation.</p>
@@ -1586,6 +1714,101 @@ export default function AdminDashboardPage() {
                       <IconChat />
                       <p className="text-sm font-medium">Sélectionnez une conversation pour répondre</p>
                     </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ⭐ NOUVEAU TAB : JOURNAL DES ENVOIS (LOGS TEMPS RÉEL) */}
+          {activeTab === "logs" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-5 md:p-8 shadow-2xl">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+                  <div>
+                    <h3 className="font-extrabold text-lg text-white uppercase tracking-wider flex items-center gap-2">
+                      <IconLogs className="w-6 h-6 text-cyan-400" /> Journal des Envois
+                    </h3>
+                    <p className="text-slate-400 text-sm mt-2">Historique complet des notifications WhatsApp et Email envoyées (manuelles, groupées, tests).</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-bold uppercase tracking-wider shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live
+                  </div>
+                </div>
+
+                {/* Stats rapides */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3 text-center">
+                    <p className="text-xl font-black text-white">{notificationLogs.length}</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Total (200 derniers)</p>
+                  </div>
+                  <div className="bg-slate-900/50 border border-emerald-500/20 rounded-xl p-3 text-center">
+                    <p className="text-xl font-black text-emerald-400">{notificationLogs.filter(l => l.channel === "whatsapp" && l.success).length}</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 flex items-center justify-center gap-1"><IconWhatsApp className="w-3 h-3" /> Réussis</p>
+                  </div>
+                  <div className="bg-slate-900/50 border border-blue-500/20 rounded-xl p-3 text-center">
+                    <p className="text-xl font-black text-blue-400">{notificationLogs.filter(l => l.channel === "email" && l.success).length}</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 flex items-center justify-center gap-1"><IconMail className="w-3 h-3" /> Réussis</p>
+                  </div>
+                  <div className="bg-slate-900/50 border border-red-500/20 rounded-xl p-3 text-center">
+                    <p className="text-xl font-black text-red-400">{notificationLogs.filter(l => l.success === false).length}</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Échecs</p>
+                  </div>
+                </div>
+
+                {/* Filtres */}
+                <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { key: "all", label: "Tous" },
+                      { key: "whatsapp", label: "WhatsApp" },
+                      { key: "email", label: "Email" },
+                      { key: "failed", label: "Échecs" },
+                    ].map((f) => (
+                      <button key={f.key} onClick={() => setLogsChannelFilter(f.key)}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider border transition-colors ${logsChannelFilter === f.key ? "bg-cyan-600 text-white border-cyan-500" : "bg-slate-900 text-slate-400 border-slate-700 hover:text-white"}`}>
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative flex-1 max-w-xs">
+                    <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <input type="text" placeholder="Chercher entreprise / contact..." value={logsSearchTerm} onChange={(e) => setLogsSearchTerm(e.target.value)}
+                      className="pl-10 pr-4 py-2.5 text-xs bg-slate-900 border border-slate-700 rounded-xl outline-none text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all w-full shadow-inner" />
+                  </div>
+                </div>
+
+                {/* Liste des logs (scrollable) */}
+                <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                  {filteredLogs.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 italic text-sm">Aucun envoi enregistré pour le moment.</div>
+                  ) : (
+                    filteredLogs.map((log) => (
+                      <div key={log.id} className={`flex items-center gap-4 p-4 rounded-2xl border transition-colors ${log.success === false ? "bg-red-500/5 border-red-500/20" : "bg-slate-900/40 border-slate-800 hover:border-slate-700"}`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${log.channel === "whatsapp" ? "bg-emerald-500/10 text-emerald-400" : "bg-blue-500/10 text-blue-400"}`}>
+                          {log.channel === "whatsapp" ? <IconWhatsApp className="w-5 h-5" /> : <IconMail className="w-5 h-5" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-white text-sm truncate">{log.companyName || "Client inconnu"}</p>
+                            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${log.success === false ? "bg-red-500/20 text-red-400" : "bg-emerald-500/20 text-emerald-400"}`}>
+                              {log.success === false ? "Échec" : "Envoyé"}
+                            </span>
+                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                              {log.triggeredBy === "auto" ? "Auto" : log.triggeredBy === "manual-bulk" ? "Groupé" : log.triggeredBy === "test" ? "Test" : "Manuel"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 truncate mt-0.5">{log.to}</p>
+                          {log.messagePreview && (
+                            <p className="text-[11px] text-slate-500 truncate mt-1 italic">"{log.messagePreview}"</p>
+                          )}
+                          {log.error && (
+                            <p className="text-[11px] text-red-400 mt-1">Erreur : {log.error}</p>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-500 shrink-0 whitespace-nowrap">{formatLogTime(log.createdAt)}</span>
+                      </div>
+                    ))
                   )}
                 </div>
               </div>
