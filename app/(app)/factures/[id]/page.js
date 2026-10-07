@@ -469,6 +469,7 @@ export default function InvoiceDetailOrEditPage() {
     image: { type: "jpeg", quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true, letterRendering: true },
     jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+    pagebreak: { mode: ["css", "legacy"] },
   }), [pdfFilename]);
 
   const getPdfBlob = useCallback(async () => {
@@ -545,27 +546,28 @@ export default function InvoiceDetailOrEditPage() {
         @media print {
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           @page { size: A4 portrait; margin: 0 !important; }
-          html, body { width: 210mm !important; height: 297mm !important; margin: 0 !important; padding: 0 !important; background: #ffffff !important; overflow: hidden !important; }
+          html, body { width: 210mm !important; margin: 0 !important; padding: 0 !important; background: #ffffff !important; }
           .print-hidden { display: none !important; }
-          #invoice-printable-container { width: 210mm !important; height: 297mm !important; max-height: 297mm !important; overflow: hidden !important; box-sizing: border-box !important; padding: 2mm 12mm 4mm 12mm !important; margin: 0 !important; border-radius: 0 !important; border: none !important; box-shadow: none !important; display: flex !important; flex-direction: column !important; }
-          .invoice-content { position: relative !important; flex: 1 1 auto !important; min-height: 0 !important; overflow: hidden !important; }
+          #invoice-printable-container {
+            width: 210mm !important; min-height: 297mm !important;
+            box-sizing: border-box !important;
+            padding: 4mm 12mm 6mm 12mm !important; margin: 0 !important;
+            border-radius: 0 !important; border: none !important; box-shadow: none !important;
+            display: block !important;
+          }
+          .invoice-content { position: relative !important; }
           .header-option2 { display: flex !important; flex-direction: row !important; justify-content: space-between !important; align-items: flex-start !important; border-bottom: 2px solid ${brandColor} !important; padding-bottom: 4px !important; margin-bottom: 4px !important; position: relative !important; z-index: 10 !important; gap: 12px !important; flex-wrap: nowrap !important; width: 100% !important; }
           .header-option2-left { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 8px !important; flex: 0 0 auto !important; min-width: 0 !important; }
           .header-option2-right { text-align: left !important; flex: 1 1 auto !important; padding-left: 12px !important; min-width: 0 !important; max-width: 240px !important; margin-left: auto !important; }
           .logo-img-option2 { height: 75px !important; width: auto !important; max-width: 150px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
           .header-grid-option1 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 14px !important; border-bottom: 1px solid #1f2937 !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; align-items: center !important; }
-          .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
-          .logo-img-option1 { height: 210px !important; width: auto !important; max-width: 420px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
-          .invoice-signature-wrapper {
-            flex-shrink: 0 !important;
-            margin-top: auto !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: flex-end !important;
-            max-height: 55mm !important;
-          }
-          .invoice-signature { margin-bottom: 2mm !important; }
-          .invoice-footer { margin-top: 0 !important; padding-bottom: 1mm !important; }
+          .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 150px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
+          .logo-img-option1 { height: 150px !important; width: auto !important; max-width: 300px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
+
+          /* ⚠️ FIX : plus de margin-top:auto / flex-stretch (créait un espace géant + page 2 blanche) */
+          .invoice-signature-wrapper { margin-top: 8mm !important; }
+          .invoice-signature { margin-bottom: 3mm !important; }
+          .invoice-footer { margin-top: 2mm !important; padding-bottom: 1mm !important; }
           .stamp-signature-img { max-width: 160px !important; max-height: 80px !important; object-fit: contain !important; display: block !important; }
           .invoice-title-row { display: block !important; }
           .invoice-notes-box { display: block !important; margin-top: 3px !important; padding: 3px 6px !important; }

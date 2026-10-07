@@ -351,7 +351,7 @@ export default function NewInvoicePage() {
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [invoiceTitle, setInvoiceTitle] = useState("");
-  const [notes, setNotes] = useState(""); // Notes / conditions pour le client
+  const [notes, setNotes] = useState(""); // 🆕 Notes / conditions pour le client
   const [items, setItems] = useState([{ id: generateItemId(), description: "", quantity: 1, unitPrice: 0 }]);
   const [status] = useState(STATUS.PENDING);
   const [remise, setRemise] = useState(0);
@@ -359,7 +359,7 @@ export default function NewInvoicePage() {
   const [tvaRate, setTvaRate] = useState(18);
   const [hasRsps, setHasRsps] = useState(false);
   const [rspsRate, setRspsRate] = useState(5);
-  const [printOption, setPrintOption] = useState("1");
+  const [printOption, setPrintOption] = useState("1"); // 🆕 sélecteur dans le formulaire
 
   const showToast = useCallback((message, type = "success", title) => {
     setToast({ message, type, title });
@@ -459,6 +459,7 @@ export default function NewInvoicePage() {
     image: { type: "jpeg", quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true, letterRendering: true },
     jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+    pagebreak: { mode: ["css", "legacy"] },
   }), [pdfFilename]);
 
   const getPdfBlob = useCallback(async () => {
@@ -493,7 +494,7 @@ export default function NewInvoicePage() {
       const newInvoiceData = {
         type: documentType, number: invoiceNumber,
         title: invoiceTitle.trim(),
-        notes: notes.trim(),
+        notes: notes.trim(), // 🆕
         clientId: selectedClientId,
         clientName: selectedCustomer?.name || selectedCustomer?.businessName || "Client Comptoir",
         clientNif: selectedCustomer?.taxId || selectedCustomer?.nif || "",
@@ -691,7 +692,7 @@ export default function NewInvoicePage() {
             </div>
           </div>
 
-          {/* NOTES / CONDITIONS POUR LE CLIENT */}
+          {/* 🆕 NOTES / CONDITIONS POUR LE CLIENT */}
           <div className="pt-4 border-t">
             <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
               Notes / Conditions pour le client <span className="text-gray-400 font-normal normal-case">(optionnel)</span>
@@ -723,19 +724,18 @@ export default function NewInvoicePage() {
             @media print {
               * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
               @page { size: A4 portrait; margin: 0 !important; }
-              html, body { width: 210mm !important; height: 297mm !important; margin: 0 !important; padding: 0 !important; background: #ffffff !important; overflow: hidden !important; }
+              html, body { width: 210mm !important; margin: 0 !important; padding: 0 !important; background: #ffffff !important; }
               .print-hidden { display: none !important; }
               .invoice-modal-backdrop { display: contents !important; }
               .invoice-scroll-wrapper { display: contents !important; }
               #invoice-printable-container {
-                width: 210mm !important; height: 297mm !important; max-height: 297mm !important;
-                overflow: hidden !important; box-sizing: border-box !important;
-                padding: 2mm 12mm 4mm 12mm !important; margin: 0 !important;
+                width: 210mm !important; min-height: 297mm !important;
+                box-sizing: border-box !important;
+                padding: 4mm 12mm 6mm 12mm !important; margin: 0 !important;
                 border-radius: 0 !important; border: none !important; box-shadow: none !important;
-                display: flex !important;
-                flex-direction: column !important;
+                display: block !important;
               }
-              .invoice-content { position: relative !important; flex: 1 1 auto !important; min-height: 0 !important; overflow: hidden !important; }
+              .invoice-content { position: relative !important; }
 
               /* OPTION 2 — forcé en row, no-wrap */
               .header-option2 {
@@ -771,22 +771,16 @@ export default function NewInvoicePage() {
 
               /* OPTION 1 */
               .header-grid-option1 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 14px !important; border-bottom: 1px solid #1f2937 !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; align-items: center !important; }
-              .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
-              .logo-img-option1 { height: 210px !important; width: auto !important; max-width: 420px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
+              .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 150px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
+              .logo-img-option1 { height: 150px !important; width: auto !important; max-width: 300px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
 
-              .invoice-signature-wrapper {
-                flex-shrink: 0 !important;
-                margin-top: auto !important;
-                display: flex !important;
-                flex-direction: column !important;
-                justify-content: flex-end !important;
-                max-height: 55mm !important;
-              }
-              .invoice-signature { margin-bottom: 2mm !important; }
-              .invoice-footer { margin-top: 0 !important; padding-bottom: 1mm !important; }
+              /* ⚠️ FIX : plus de margin-top:auto (créait un espace géant + page 2 blanche) */
+              .invoice-signature-wrapper { margin-top: 8mm !important; }
+              .invoice-signature { margin-bottom: 3mm !important; }
+              .invoice-footer { margin-top: 2mm !important; padding-bottom: 1mm !important; }
               .stamp-signature-img { max-width: 160px !important; max-height: 80px !important; object-fit: contain !important; display: block !important; }
               .invoice-title-row { display: block !important; }
-              .invoice-notes-box { display: block !important; margin-top: 3px !important; padding: 3px 6px !important; }
+              .invoice-notes-box { display: block !important; }
             }
           `}</style>
 
@@ -913,9 +907,9 @@ export default function NewInvoicePage() {
                   <span className="font-bold underline">{numberToWords(totalTtc)}</span>
                 </div>
 
-                {/* ENCADRÉ NOTES / CONDITIONS */}
+                {/* 🆕 ENCADRÉ NOTES / CONDITIONS */}
                 {notes.trim() && (
-                  <div className="invoice-notes-box relative z-10 mt-2 p-2 print:mt-1 print:p-1.5 rounded-lg border border-dashed border-gray-400 bg-amber-50">
+                  <div className="invoice-notes-box relative z-10 mt-2 p-2 rounded-lg border border-dashed border-gray-400 bg-amber-50">
                     <p className="text-[9px] font-bold text-gray-700 uppercase mb-0.5 tracking-wide">📌 Remarques / Conditions</p>
                     <p className="text-[9px] text-gray-700 whitespace-pre-line leading-snug">{notes.trim()}</p>
                   </div>
@@ -929,13 +923,13 @@ export default function NewInvoicePage() {
               </div>
 
               <div className="invoice-signature-wrapper">
-                <div className="invoice-signature mt-4 print:mt-0">
+                <div className="invoice-signature mt-4">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
                     <div />
                     <SignatureBlock stampSignatureUrl={stampSignatureUrl} />
                   </div>
                 </div>
-                <div className="invoice-footer mt-4 print:mt-0">
+                <div className="invoice-footer mt-4">
                   <div className="w-full border-t-2 pt-1.5 text-[9px] text-center text-gray-600 bg-white" style={{ borderColor: mainColor }}>
                     <p className="font-bold text-gray-900 text-[10px] mb-0.5">{companyData?.companyName}</p>
                     <div className="flex justify-center gap-x-2 gap-y-0 flex-wrap font-medium">
