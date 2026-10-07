@@ -300,7 +300,6 @@ export default function InvoiceDetailOrEditPage() {
   const { id } = useParams();
   const router = useRouter();
 
-  // ✅ Récupère isExpired depuis le contexte
   const { isExpired } = useSubscription();
 
   const [currentUser, setCurrentUser] = useState(null);
@@ -322,7 +321,7 @@ export default function InvoiceDetailOrEditPage() {
   const [paymentMethod, setPaymentMethod] = useState("Espèces");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [invoiceTitle, setInvoiceTitle] = useState("");
-  const [notes, setNotes] = useState(""); // 🆕 Notes / conditions pour le client
+  const [notes, setNotes] = useState(""); // Notes / conditions pour le client
   const [items, setItems] = useState([]);
   const [mainOeuvre, setMainOeuvre] = useState(0);
   const [remise, setRemise] = useState(0);
@@ -360,7 +359,7 @@ export default function InvoiceDetailOrEditPage() {
           setPaymentMethod(data.paymentMethod || "Espèces");
           setSelectedClientId(data.clientId || "");
           setInvoiceTitle(data.title || "");
-          setNotes(data.notes || ""); // 🆕
+          setNotes(data.notes || "");
           setItems((data.items || []).map((item) => ({ ...item, id: item.id ?? generateItemId() })));
           setMainOeuvre(data.mainOeuvre || 0);
           setRemise(data.remise || 0);
@@ -393,7 +392,6 @@ export default function InvoiceDetailOrEditPage() {
   const currentCustomer = customers.find((c) => c.id === (selectedClientId || invoice?.clientId));
   const clientNifDisplay = currentCustomer?.taxId || currentCustomer?.nif || invoice?.clientNif || invoice?.taxId || "N/A";
 
-  // ✅ Bloque la modification si expiré
   const handleStartEdit = () => {
     if (isExpired) {
       showToast("Abonnement expiré. Modification impossible.", "error");
@@ -404,7 +402,6 @@ export default function InvoiceDetailOrEditPage() {
 
   const handleUpdate = async (e) => {
     e.preventDefault();
-    // ✅ Double vérification
     if (isExpired) {
       showToast("Abonnement expiré. Enregistrement impossible.", "error");
       return;
@@ -417,7 +414,7 @@ export default function InvoiceDetailOrEditPage() {
       const paidOrPartial = isPaidOrPartial(normalizedStatus);
       const updatedData = {
         type: invoiceType, number: invoiceNumber, title: invoiceTitle.trim(),
-        notes: notes.trim(), // 🆕
+        notes: notes.trim(),
         status: normalizedStatus,
         paymentDate: paidOrPartial ? paymentDate : "",
         paymentMethod: paidOrPartial ? paymentMethod : "",
@@ -442,7 +439,6 @@ export default function InvoiceDetailOrEditPage() {
     } finally { setIsSaving(false); }
   };
 
-  // ✅ Bloque la suppression si expiré
   const handleDeleteClick = () => {
     if (isExpired) {
       showToast("Abonnement expiré. Suppression impossible.", "error");
@@ -551,8 +547,8 @@ export default function InvoiceDetailOrEditPage() {
           @page { size: A4 portrait; margin: 0 !important; }
           html, body { width: 210mm !important; height: 297mm !important; margin: 0 !important; padding: 0 !important; background: #ffffff !important; overflow: hidden !important; }
           .print-hidden { display: none !important; }
-          #invoice-printable-container { width: 210mm !important; height: 297mm !important; max-height: 297mm !important; overflow: hidden !important; box-sizing: border-box !important; padding: 2mm 12mm 4mm 12mm !important; margin: 0 !important; border-radius: 0 !important; border: none !important; box-shadow: none !important; }
-          .invoice-content { position: relative !important; }
+          #invoice-printable-container { width: 210mm !important; height: 297mm !important; max-height: 297mm !important; overflow: hidden !important; box-sizing: border-box !important; padding: 2mm 12mm 4mm 12mm !important; margin: 0 !important; border-radius: 0 !important; border: none !important; box-shadow: none !important; display: flex !important; flex-direction: column !important; }
+          .invoice-content { position: relative !important; flex: 1 1 auto !important; min-height: 0 !important; overflow: hidden !important; }
           .header-option2 { display: flex !important; flex-direction: row !important; justify-content: space-between !important; align-items: flex-start !important; border-bottom: 2px solid ${brandColor} !important; padding-bottom: 4px !important; margin-bottom: 4px !important; position: relative !important; z-index: 10 !important; gap: 12px !important; flex-wrap: nowrap !important; width: 100% !important; }
           .header-option2-left { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 8px !important; flex: 0 0 auto !important; min-width: 0 !important; }
           .header-option2-right { text-align: left !important; flex: 1 1 auto !important; padding-left: 12px !important; min-width: 0 !important; max-width: 240px !important; margin-left: auto !important; }
@@ -560,18 +556,24 @@ export default function InvoiceDetailOrEditPage() {
           .header-grid-option1 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 14px !important; border-bottom: 1px solid #1f2937 !important; padding-bottom: 1mm !important; margin-bottom: 0 !important; position: relative !important; z-index: 10 !important; align-items: center !important; }
           .logo-container-option1 { display: flex !important; align-items: center !important; justify-content: center !important; height: 210px !important; width: 100% !important; overflow: hidden !important; flex-shrink: 0 !important; }
           .logo-img-option1 { height: 210px !important; width: auto !important; max-width: 420px !important; object-fit: contain !important; display: block !important; flex-shrink: 0 !important; }
-          .invoice-signature-wrapper { min-height: 94mm !important; display: flex !important; flex-direction: column !important; justify-content: flex-end !important; }
-          .invoice-signature { margin-bottom: 3mm !important; }
+          .invoice-signature-wrapper {
+            flex-shrink: 0 !important;
+            margin-top: auto !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-end !important;
+            max-height: 55mm !important;
+          }
+          .invoice-signature { margin-bottom: 2mm !important; }
           .invoice-footer { margin-top: 0 !important; padding-bottom: 1mm !important; }
           .stamp-signature-img { max-width: 160px !important; max-height: 80px !important; object-fit: contain !important; display: block !important; }
           .invoice-title-row { display: block !important; }
-          .invoice-notes-box { display: block !important; }
+          .invoice-notes-box { display: block !important; margin-top: 3px !important; padding: 3px 6px !important; }
         }
       `}</style>
 
       <Toast toast={toast} onClose={() => setToast(null)} />
 
-      {/* ✅ Bannière blocage dans la page facture detail */}
       {isExpired && (
         <div className="print-hidden bg-red-600 text-white px-4 py-3 text-center text-sm font-bold flex items-center justify-center gap-4">
           <span>🔒 Abonnement expiré — Modification et suppression désactivées.</span>
@@ -598,7 +600,6 @@ export default function InvoiceDetailOrEditPage() {
         <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto">
           {!isEditing ? (
             <>
-              {/* ✅ Bouton Modifier désactivé si expiré */}
               <button
                 onClick={handleStartEdit}
                 disabled={isExpired}
@@ -611,7 +612,6 @@ export default function InvoiceDetailOrEditPage() {
                 {isExpired ? "🔒 Modifier" : "Modifier"}
               </button>
 
-              {/* PDF — toujours accessible */}
               <button
                 onClick={handlePrint}
                 disabled={isGeneratingPdf}
@@ -622,7 +622,6 @@ export default function InvoiceDetailOrEditPage() {
                 {isGeneratingPdf ? "Génération..." : "PDF / Imprimer"}
               </button>
 
-              {/* Partager — toujours accessible */}
               <button
                 onClick={handleOpenShare}
                 className="flex-1 md:flex-none px-3 md:px-4 py-2 rounded-xl text-sm font-medium bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 flex items-center justify-center gap-1.5"
@@ -630,7 +629,6 @@ export default function InvoiceDetailOrEditPage() {
                 📤 <span>Partager</span>
               </button>
 
-              {/* ✅ Bouton Supprimer désactivé si expiré */}
               {!confirmingDelete ? (
                 <button
                   onClick={handleDeleteClick}
@@ -813,9 +811,9 @@ export default function InvoiceDetailOrEditPage() {
                 <span className="font-bold underline">{numberToWords(montantArrete)}</span>
               </div>
 
-              {/* 🆕 ENCADRÉ NOTES / CONDITIONS */}
+              {/* ENCADRÉ NOTES / CONDITIONS */}
               {invoice.notes && invoice.notes.trim() && (
-                <div className="invoice-notes-box relative z-10 mt-2 p-2 print:p-1.5 rounded-lg border border-dashed border-gray-400 bg-amber-50">
+                <div className="invoice-notes-box relative z-10 mt-2 p-2 print:mt-1 print:p-1.5 rounded-lg border border-dashed border-gray-400 bg-amber-50">
                   <p className="text-[9px] print:text-[8px] font-bold text-gray-700 uppercase mb-0.5 tracking-wide">📌 Remarques / Conditions</p>
                   <p className="text-[9px] print:text-[8px] text-gray-700 whitespace-pre-line leading-snug">{invoice.notes.trim()}</p>
                 </div>
@@ -961,7 +959,7 @@ export default function InvoiceDetailOrEditPage() {
               </div>
             </div>
 
-            {/* 🆕 NOTES / CONDITIONS POUR LE CLIENT */}
+            {/* NOTES / CONDITIONS POUR LE CLIENT */}
             <div className="pt-4 border-t">
               <label className="block text-sm font-semibold mb-1">
                 Notes / Conditions pour le client <span className="text-gray-400 font-normal text-xs">(optionnel)</span>
