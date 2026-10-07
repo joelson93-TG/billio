@@ -322,6 +322,7 @@ export default function InvoiceDetailOrEditPage() {
   const [paymentMethod, setPaymentMethod] = useState("Espèces");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [invoiceTitle, setInvoiceTitle] = useState("");
+  const [notes, setNotes] = useState(""); // 🆕 Notes / conditions pour le client
   const [items, setItems] = useState([]);
   const [mainOeuvre, setMainOeuvre] = useState(0);
   const [remise, setRemise] = useState(0);
@@ -359,6 +360,7 @@ export default function InvoiceDetailOrEditPage() {
           setPaymentMethod(data.paymentMethod || "Espèces");
           setSelectedClientId(data.clientId || "");
           setInvoiceTitle(data.title || "");
+          setNotes(data.notes || ""); // 🆕
           setItems((data.items || []).map((item) => ({ ...item, id: item.id ?? generateItemId() })));
           setMainOeuvre(data.mainOeuvre || 0);
           setRemise(data.remise || 0);
@@ -415,6 +417,7 @@ export default function InvoiceDetailOrEditPage() {
       const paidOrPartial = isPaidOrPartial(normalizedStatus);
       const updatedData = {
         type: invoiceType, number: invoiceNumber, title: invoiceTitle.trim(),
+        notes: notes.trim(), // 🆕
         status: normalizedStatus,
         paymentDate: paidOrPartial ? paymentDate : "",
         paymentMethod: paidOrPartial ? paymentMethod : "",
@@ -562,6 +565,7 @@ export default function InvoiceDetailOrEditPage() {
           .invoice-footer { margin-top: 0 !important; padding-bottom: 1mm !important; }
           .stamp-signature-img { max-width: 160px !important; max-height: 80px !important; object-fit: contain !important; display: block !important; }
           .invoice-title-row { display: block !important; }
+          .invoice-notes-box { display: block !important; }
         }
       `}</style>
 
@@ -808,6 +812,14 @@ export default function InvoiceDetailOrEditPage() {
                 Arrêté à la somme de : <br className="block md:hidden" />
                 <span className="font-bold underline">{numberToWords(montantArrete)}</span>
               </div>
+
+              {/* 🆕 ENCADRÉ NOTES / CONDITIONS */}
+              {invoice.notes && invoice.notes.trim() && (
+                <div className="invoice-notes-box relative z-10 mt-2 p-2 print:p-1.5 rounded-lg border border-dashed border-gray-400 bg-amber-50">
+                  <p className="text-[9px] print:text-[8px] font-bold text-gray-700 uppercase mb-0.5 tracking-wide">📌 Remarques / Conditions</p>
+                  <p className="text-[9px] print:text-[8px] text-gray-700 whitespace-pre-line leading-snug">{invoice.notes.trim()}</p>
+                </div>
+              )}
             </div>
 
             <div className="invoice-signature-wrapper">
@@ -947,6 +959,22 @@ export default function InvoiceDetailOrEditPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* 🆕 NOTES / CONDITIONS POUR LE CLIENT */}
+            <div className="pt-4 border-t">
+              <label className="block text-sm font-semibold mb-1">
+                Notes / Conditions pour le client <span className="text-gray-400 font-normal text-xs">(optionnel)</span>
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                placeholder="Ex : 40% du montant doit être payé avant le démarrage du projet..."
+                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                maxLength={500}
+              />
+              <p className="text-[11px] text-gray-400 mt-1">Ce texte apparaîtra dans un encadré en bas du document, avant la signature.</p>
             </div>
 
             <div className="flex justify-end pt-4 border-t">

@@ -351,6 +351,7 @@ export default function NewInvoicePage() {
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [invoiceTitle, setInvoiceTitle] = useState("");
+  const [notes, setNotes] = useState(""); // 🆕 Notes / conditions pour le client
   const [items, setItems] = useState([{ id: generateItemId(), description: "", quantity: 1, unitPrice: 0 }]);
   const [status] = useState(STATUS.PENDING);
   const [remise, setRemise] = useState(0);
@@ -492,6 +493,7 @@ export default function NewInvoicePage() {
       const newInvoiceData = {
         type: documentType, number: invoiceNumber,
         title: invoiceTitle.trim(),
+        notes: notes.trim(), // 🆕
         clientId: selectedClientId,
         clientName: selectedCustomer?.name || selectedCustomer?.businessName || "Client Comptoir",
         clientNif: selectedCustomer?.taxId || selectedCustomer?.nif || "",
@@ -609,7 +611,7 @@ export default function NewInvoicePage() {
             </div>
           </div>
 
-          {/* 🆕 SÉLECTEUR D'EN-TÊTE dans la nouvelle facture */}
+          {/* SÉLECTEUR D'EN-TÊTE + TITRE */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
@@ -689,6 +691,22 @@ export default function NewInvoicePage() {
             </div>
           </div>
 
+          {/* 🆕 NOTES / CONDITIONS POUR LE CLIENT */}
+          <div className="pt-4 border-t">
+            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+              Notes / Conditions pour le client <span className="text-gray-400 font-normal normal-case">(optionnel)</span>
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Ex : 40% du montant doit être payé avant le démarrage du projet..."
+              className="w-full p-3 border rounded-xl bg-gray-50 text-sm focus:bg-white transition-colors resize-none"
+              maxLength={500}
+            />
+            <p className="text-[11px] text-gray-400 mt-1">Ce texte apparaîtra dans un encadré en bas du document, avant la signature.</p>
+          </div>
+
           <div className="flex justify-start pt-2 sm:hidden">
             <button type="button" onClick={() => router.push("/factures")} className="px-4 py-2.5 bg-white text-gray-600 font-medium rounded-xl text-sm border border-gray-200 hover:bg-gray-50 transition-all cursor-pointer flex items-center gap-1.5">
               <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-gray-400"><path d="M6.4 5L5 6.4 8.6 10 5 13.6 6.4 15 10 11.4 13.6 15 15 13.6 11.4 10 15 6.4 13.6 5 10 8.6z" /></svg>
@@ -759,6 +777,7 @@ export default function NewInvoicePage() {
               .invoice-footer { margin-top: 0 !important; padding-bottom: 1mm !important; }
               .stamp-signature-img { max-width: 160px !important; max-height: 80px !important; object-fit: contain !important; display: block !important; }
               .invoice-title-row { display: block !important; }
+              .invoice-notes-box { display: block !important; }
             }
           `}</style>
 
@@ -884,6 +903,14 @@ export default function NewInvoicePage() {
                   Arrêté à la somme de : <br className="block md:hidden" />
                   <span className="font-bold underline">{numberToWords(totalTtc)}</span>
                 </div>
+
+                {/* 🆕 ENCADRÉ NOTES / CONDITIONS */}
+                {notes.trim() && (
+                  <div className="invoice-notes-box relative z-10 mt-2 p-2 rounded-lg border border-dashed border-gray-400 bg-amber-50">
+                    <p className="text-[9px] font-bold text-gray-700 uppercase mb-0.5 tracking-wide">📌 Remarques / Conditions</p>
+                    <p className="text-[9px] text-gray-700 whitespace-pre-line leading-snug">{notes.trim()}</p>
+                  </div>
+                )}
 
                 {isProforma && (
                   <div className="mt-4 pt-3 border-t text-[9px] text-gray-500 text-center font-medium relative z-10">
